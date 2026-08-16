@@ -21,6 +21,7 @@ import SalesManager from './pages/departments/SalesManager'
 import Accountant from './pages/departments/Accountant'
 import MD from './pages/departments/MD'
 import HR from './pages/departments/HR'
+import Cutting from './pages/departments/cutting'
 
 import './App.css'
 
@@ -138,7 +139,11 @@ function App() {
             />
           }
         />
-
+      {/*CUtting*/}
+      <Route
+        path="/departments/cutting"
+         element={<Cutting user={currentUser} />}
+        />
 
         {/* =========================================
             DESIGNER

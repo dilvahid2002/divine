@@ -9,9 +9,16 @@ interface HomePageProps {
   }
 }
 
+/*
+ * =========================================
+ * AVAILABLE ROLES
+ * =========================================
+ */
+
 const availableRoles = [
   'Sales',
   'Designer',
+  'Cutting',
   'Printer',
   'Production',
   'Production Manager',
@@ -21,10 +28,18 @@ const availableRoles = [
   'HR',
 ]
 
+/*
+ * =========================================
+ * DEPARTMENT PATHS
+ * =========================================
+ */
+
 const departmentPaths: Record<string, string> = {
   Sales: '/departments/sales',
 
   Designer: '/departments/designer',
+
+  Cutting: '/departments/cutting',
 
   Printer: '/departments/printer',
 
@@ -44,16 +59,53 @@ const departmentPaths: Record<string, string> = {
   HR: '/departments/hr',
 }
 
-function HomePage({ user }: HomePageProps) {
+/*
+ * =========================================
+ * HOME PAGE
+ * =========================================
+ */
+
+function HomePage({
+  user,
+}: HomePageProps) {
   const navigate = useNavigate()
 
   /*
-   * Navigate to department
+   * =========================================
+   * CHECK USER ROLE
+   * =========================================
+   *
+   * Case-insensitive role checking.
+   *
+   * Therefore all of these work:
+   *
+   * "Cutting"
+   * "cutting"
+   * "CUTTING"
+   *
+   * This is useful because older Firebase
+   * users may have different capitalization.
    */
+
+  const hasRole = (role: string) => {
+    return user.roles.some(
+      (userRole) =>
+        userRole.trim().toLowerCase() ===
+        role.trim().toLowerCase(),
+    )
+  }
+
+  /*
+   * =========================================
+   * NAVIGATE TO DEPARTMENT
+   * =========================================
+   */
+
   const handleDepartmentClick = (
     role: string,
   ) => {
-    const path = departmentPaths[role]
+    const path =
+      departmentPaths[role]
 
     if (path) {
       navigate(path)
@@ -61,13 +113,22 @@ function HomePage({ user }: HomePageProps) {
   }
 
   /*
-   * Navigate to Sales Statistics
+   * =========================================
+   * NAVIGATE TO SALES STATISTICS
+   * =========================================
    */
+
   const handleSalesStatisticsClick = () => {
     navigate(
       '/departments/sales-statistics',
     )
   }
+
+  /*
+   * =========================================
+   * PAGE
+   * =========================================
+   */
 
   return (
     <div className="home-page">
@@ -79,13 +140,18 @@ function HomePage({ user }: HomePageProps) {
       <header className="home-header">
 
         <div>
+
           <h1>
             Work Manager
           </h1>
 
           <p>
-            Welcome, <strong>{user.name}</strong>
+            Welcome,{' '}
+            <strong>
+              {user.name}
+            </strong>
           </p>
+
         </div>
 
         <div className="user-info">
@@ -129,10 +195,11 @@ function HomePage({ user }: HomePageProps) {
           ======================================== */}
 
           {(() => {
+
             const role = 'Sales'
 
             const isActive =
-              user.roles.includes(role)
+              hasRole(role)
 
             return (
               <button
@@ -145,7 +212,9 @@ function HomePage({ user }: HomePageProps) {
                 }`}
                 disabled={!isActive}
                 onClick={() =>
-                  handleDepartmentClick(role)
+                  handleDepartmentClick(
+                    role,
+                  )
                 }
               >
 
@@ -165,6 +234,7 @@ function HomePage({ user }: HomePageProps) {
 
               </button>
             )
+
           })()}
 
 
@@ -207,7 +277,7 @@ function HomePage({ user }: HomePageProps) {
             .map((role) => {
 
               const isActive =
-                user.roles.includes(role)
+                hasRole(role)
 
               return (
                 <button
@@ -242,6 +312,7 @@ function HomePage({ user }: HomePageProps) {
 
                 </button>
               )
+
             })}
 
         </div>

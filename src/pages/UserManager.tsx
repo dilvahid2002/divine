@@ -22,6 +22,7 @@ const availableRoles = [
   'Sales',
   'Designer',
   'Printer',
+  'cutting',
   'Production',
   'Production Manager',
   'Sales Manager',

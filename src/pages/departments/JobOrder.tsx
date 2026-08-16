@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   query,
   runTransaction,
@@ -55,45 +54,74 @@ function JobOrder({ user }: JobOrderProps) {
      BRANCH
   ========================================== */
 
-  const [branch, setBranch] = useState<Branch | ''>('')
+  const [branch, setBranch] =
+    useState<Branch | ''>('')
 
 
   /* =========================================
      CUSTOMER DETAILS
   ========================================== */
 
-  const [date, setDate] = useState('')
-  const [expectedDeliveryDate, setExpectedDeliveryDate] =
+  const [date, setDate] =
     useState('')
 
-  const [customerName, setCustomerName] = useState('')
-  const [companyName, setCompanyName] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
-  const [whatsappNumber, setWhatsappNumber] = useState('')
-  const [place, setPlace] = useState('')
+  const [
+    expectedDeliveryDate,
+    setExpectedDeliveryDate,
+  ] = useState('')
+
+  const [customerName, setCustomerName] =
+    useState('')
+
+  const [companyName, setCompanyName] =
+    useState('')
+
+  const [phoneNumber, setPhoneNumber] =
+    useState('')
+
+  const [whatsappNumber, setWhatsappNumber] =
+    useState('')
+
+  const [place, setPlace] =
+    useState('')
 
 
   /* =========================================
      ITEMS
   ========================================== */
 
-  const [items, setItems] = useState<Item[]>([])
+  const [items, setItems] =
+    useState<Item[]>([])
 
 
   /* =========================================
      OFFICE INFORMATION
   ========================================== */
 
-  const [designJob, setDesignJob] = useState(false)
-  const [printJob, setPrintJob] = useState(false)
-  const [productionJob, setProductionJob] = useState(false)
+  const [designJob, setDesignJob] =
+    useState(false)
+
+  const [printJob, setPrintJob] =
+    useState(false)
+
+  const [productionJob, setProductionJob] =
+    useState(false)
+
+  /*
+   * NEW:
+   * Cutting job
+   */
+  const [cuttingJob, setCuttingJob] =
+    useState(false)
 
 
   /* =========================================
      DESIGNER
   ========================================== */
 
-  const [designers, setDesigners] = useState<Designer[]>([])
+  const [designers, setDesigners] =
+    useState<Designer[]>([])
+
   const [selectedDesigner, setSelectedDesigner] =
     useState('')
 
@@ -113,8 +141,12 @@ function JobOrder({ user }: JobOrderProps) {
      FORM STATE
   ========================================== */
 
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState('')
+  const [saving, setSaving] =
+    useState(false)
+
+  const [message, setMessage] =
+    useState('')
+
   const [messageType, setMessageType] =
     useState<'error' | 'success'>('error')
 
@@ -152,68 +184,90 @@ function JobOrder({ user }: JobOrderProps) {
       setMessage('')
 
       try {
-        const usersRef = collection(db, 'users')
-
-        const designerQuery = query(
-          usersRef,
-          where(
-            'roles',
-            'array-contains',
-            'designer',
-          ),
-        )
-
-        const snapshot =
-          await getDocs(designerQuery)
-
-        const designerList: Designer[] =
-          snapshot.docs.map((document) => {
-            const data = document.data()
-
-            return {
-              id: document.id,
-              name: data.name || '',
-              username: data.username || '',
-            }
-          })
+        const usersRef =
+          collection(db, 'users')
 
         /*
-         * Some existing users may have "Designer"
-         * with a capital D depending on older data.
-         *
-         * If the first query returned nothing, try
-         * the capitalized version as well.
+         * First try lowercase "designer"
          */
-        if (designerList.length === 0) {
-          const capitalDesignerQuery = query(
+        const designerQuery =
+          query(
             usersRef,
             where(
               'roles',
               'array-contains',
-              'Designer',
+              'designer',
             ),
           )
 
-          const capitalSnapshot =
-            await getDocs(capitalDesignerQuery)
+        const snapshot =
+          await getDocs(
+            designerQuery,
+          )
 
-          const capitalDesignerList: Designer[] =
+        const designerList: Designer[] =
+          snapshot.docs.map(
+            (document) => {
+              const data =
+                document.data()
+
+              return {
+                id: document.id,
+                name:
+                  data.name || '',
+                username:
+                  data.username || '',
+              }
+            },
+          )
+
+        /*
+         * Backward compatibility:
+         * Some users may have "Designer"
+         * with capital D.
+         */
+        if (
+          designerList.length === 0
+        ) {
+          const capitalDesignerQuery =
+            query(
+              usersRef,
+              where(
+                'roles',
+                'array-contains',
+                'Designer',
+              ),
+            )
+
+          const capitalSnapshot =
+            await getDocs(
+              capitalDesignerQuery,
+            )
+
+          const capitalDesignerList:
+            Designer[] =
             capitalSnapshot.docs.map(
               (document) => {
-                const data = document.data()
+                const data =
+                  document.data()
 
                 return {
                   id: document.id,
-                  name: data.name || '',
+                  name:
+                    data.name || '',
                   username:
                     data.username || '',
                 }
               },
             )
 
-          setDesigners(capitalDesignerList)
+          setDesigners(
+            capitalDesignerList,
+          )
         } else {
-          setDesigners(designerList)
+          setDesigners(
+            designerList,
+          )
         }
       } catch (error) {
         console.error(
@@ -250,10 +304,12 @@ function JobOrder({ user }: JobOrderProps) {
       remarks: '',
     }
 
-    setItems((previousItems) => [
-      ...previousItems,
-      newItem,
-    ])
+    setItems(
+      (previousItems) => [
+        ...previousItems,
+        newItem,
+      ],
+    )
   }
 
 
@@ -266,19 +322,25 @@ function JobOrder({ user }: JobOrderProps) {
     field: keyof Item,
     value: string,
   ) => {
-    setItems((previousItems) =>
-      previousItems.map(
-        (item, itemIndex) => {
-          if (itemIndex !== index) {
-            return item
-          }
+    setItems(
+      (previousItems) =>
+        previousItems.map(
+          (
+            item,
+            itemIndex,
+          ) => {
+            if (
+              itemIndex !== index
+            ) {
+              return item
+            }
 
-          return {
-            ...item,
-            [field]: value,
-          }
-        },
-      ),
+            return {
+              ...item,
+              [field]: value,
+            }
+          },
+        ),
     )
   }
 
@@ -290,16 +352,26 @@ function JobOrder({ user }: JobOrderProps) {
   const handleRemoveItem = (
     index: number,
   ) => {
-    setItems((previousItems) =>
-      previousItems
-        .filter(
-          (_, itemIndex) =>
-            itemIndex !== index,
-        )
-        .map((item, itemIndex) => ({
-          ...item,
-          slNo: itemIndex + 1,
-        })),
+    setItems(
+      (previousItems) =>
+        previousItems
+          .filter(
+            (
+              _,
+              itemIndex,
+            ) =>
+              itemIndex !== index,
+          )
+          .map(
+            (
+              item,
+              itemIndex,
+            ) => ({
+              ...item,
+              slNo:
+                itemIndex + 1,
+            }),
+          ),
     )
   }
 
@@ -315,6 +387,7 @@ function JobOrder({ user }: JobOrderProps) {
 
     setMessage('')
 
+
     /* -----------------------------------------
        VALIDATION
     ------------------------------------------ */
@@ -323,25 +396,34 @@ function JobOrder({ user }: JobOrderProps) {
       setMessage(
         'Please select a branch.',
       )
+
       setMessageType('error')
+
       return
     }
+
 
     if (!date) {
       setMessage(
         'Please select the entry date.',
       )
+
       setMessageType('error')
+
       return
     }
+
 
     if (!expectedDeliveryDate) {
       setMessage(
         'Please select the expected delivery date.',
       )
+
       setMessageType('error')
+
       return
     }
+
 
     if (
       expectedDeliveryDate < date
@@ -349,45 +431,66 @@ function JobOrder({ user }: JobOrderProps) {
       setMessage(
         'Expected delivery date cannot be before the entry date.',
       )
+
       setMessageType('error')
+
       return
     }
+
 
     if (!customerName.trim()) {
       setMessage(
         'Please enter the customer name.',
       )
+
       setMessageType('error')
+
       return
     }
+
 
     if (!phoneNumber.trim()) {
       setMessage(
         'Please enter the phone number.',
       )
+
       setMessageType('error')
+
       return
     }
+
 
     if (items.length === 0) {
       setMessage(
         'Please add at least one item.',
       )
+
       setMessageType('error')
+
       return
     }
 
+
+    /*
+     * IMPORTANT:
+     *
+     * Cutting is now included here.
+     */
     if (
       !designJob &&
       !printJob &&
-      !productionJob
+      !productionJob &&
+      !cuttingJob
     ) {
       setMessage(
         'Please select at least one office job type.',
       )
+
       setMessageType('error')
+
       return
     }
+
 
     if (
       designJob &&
@@ -396,9 +499,12 @@ function JobOrder({ user }: JobOrderProps) {
       setMessage(
         'Please select a designer for the design job.',
       )
+
       setMessageType('error')
+
       return
     }
+
 
     if (
       printJob &&
@@ -407,7 +513,9 @@ function JobOrder({ user }: JobOrderProps) {
       setMessage(
         'Please select a branch for the print job.',
       )
+
       setMessageType('error')
+
       return
     }
 
@@ -420,28 +528,36 @@ function JobOrder({ user }: JobOrderProps) {
 
     try {
       /*
-       * We use a dedicated counter document.
+       * Dedicated counter:
        *
-       * Document:
        * counters/jobOrders
        *
-       * The first order will be 0.
-       * Every following order gets +1.
+       * First order = 0
+       * Next = 1
+       * Next = 2
        *
-       * Transaction makes this safer when multiple
-       * users create orders at the same time.
+       * Transaction prevents duplicate
+       * order numbers when multiple users
+       * create orders simultaneously.
        */
 
-      const counterRef = doc(
-        db,
-        'counters',
-        'jobOrders',
-      )
+      const counterRef =
+        doc(
+          db,
+          'counters',
+          'jobOrders',
+        )
 
       const jobOrderRef =
-        doc(collection(db, 'job_orders'))
+        doc(
+          collection(
+            db,
+            'job_orders',
+          ),
+        )
 
       let newOrderId = 0
+
 
       await runTransaction(
         db,
@@ -451,7 +567,13 @@ function JobOrder({ user }: JobOrderProps) {
               counterRef,
             )
 
-          if (!counterSnapshot.exists()) {
+
+          if (
+            !counterSnapshot.exists()
+          ) {
+            /*
+             * First order
+             */
             newOrderId = 0
 
             transaction.set(
@@ -470,28 +592,55 @@ function JobOrder({ user }: JobOrderProps) {
               )
 
             newOrderId =
-              Number.isFinite(lastOrderId)
+              Number.isFinite(
+                lastOrderId,
+              )
                 ? lastOrderId + 1
                 : 0
 
             transaction.update(
               counterRef,
               {
-                lastOrderId: newOrderId,
+                lastOrderId:
+                  newOrderId,
               },
             )
           }
 
+
+          /*
+           * Create job order
+           */
           transaction.set(
             jobOrderRef,
             {
-              orderId: newOrderId,
+              /* =========================
+                 ORDER
+              ========================== */
+
+              orderId:
+                newOrderId,
+
+
+              /* =========================
+                 BRANCH
+              ========================== */
 
               branch,
+
+
+              /* =========================
+                 DATES
+              ========================== */
 
               date,
 
               expectedDeliveryDate,
+
+
+              /* =========================
+                 CUSTOMER
+              ========================== */
 
               customer: {
                 name:
@@ -510,9 +659,22 @@ function JobOrder({ user }: JobOrderProps) {
                   place.trim(),
               },
 
+
+              /* =========================
+                 ITEMS
+              ========================== */
+
               items,
 
+
+              /* =========================
+                 OFFICE INFORMATION
+              ========================== */
+
               officeInfo: {
+                /*
+                 * DESIGN
+                 */
                 designJob,
 
                 designer:
@@ -520,6 +682,10 @@ function JobOrder({ user }: JobOrderProps) {
                     ? selectedDesigner
                     : null,
 
+
+                /*
+                 * PRINT
+                 */
                 printJob,
 
                 printBranch:
@@ -527,33 +693,89 @@ function JobOrder({ user }: JobOrderProps) {
                     ? printBranch
                     : null,
 
+
+                /*
+                 * PRODUCTION
+                 */
                 productionJob,
+
+
+                /*
+                 * CUTTING
+                 *
+                 * NEW
+                 */
+                cuttingJob,
               },
 
+
+              /* =========================
+                 STATUSES
+              ========================== */
+
               statuses: {
+                /*
+                 * DESIGN
+                 */
                 design:
                   designJob
                     ? 'Pending'
                     : 'Finished',
 
+
+                /*
+                 * PRINT
+                 */
                 print:
                   printJob
                     ? 'Pending'
                     : 'Finished',
 
+
+                /*
+                 * PRODUCTION
+                 */
                 production:
                   productionJob
                     ? 'Pending'
                     : 'Finished',
+
+
+                /*
+                 * CUTTING
+                 *
+                 * NEW
+                 */
+                cutting:
+                  cuttingJob
+                    ? 'Pending'
+                    : 'Finished',
               },
+
+
+              /* =========================
+                 DELIVERY
+              ========================== */
 
               delivered: false,
 
+
+              /* =========================
+                 CUSTOMER ADVISER
+              ========================== */
+
               customerAdviser: {
-                name: user.name,
+                name:
+                  user.name,
+
                 username:
                   user.username,
               },
+
+
+              /* =========================
+                 CREATED AT
+              ========================== */
 
               createdAt:
                 serverTimestamp(),
@@ -573,13 +795,17 @@ function JobOrder({ user }: JobOrderProps) {
 
       setMessageType('success')
 
+
       /*
-       * Give the user a moment to see the success
-       * message, then return to Sales.
+       * Return to Sales after
+       * displaying success message.
        */
       setTimeout(() => {
-        navigate('/departments/sales')
+        navigate(
+          '/departments/sales',
+        )
       }, 700)
+
     } catch (error) {
       console.error(
         'Error creating job order:',
@@ -606,6 +832,7 @@ function JobOrder({ user }: JobOrderProps) {
 
       <div className="department-container">
 
+
         {/* =====================================
             HEADER
         ====================================== */}
@@ -613,6 +840,7 @@ function JobOrder({ user }: JobOrderProps) {
         <div className="department-header">
 
           <div>
+
             <h1>
               Create Job Order
             </h1>
@@ -620,13 +848,17 @@ function JobOrder({ user }: JobOrderProps) {
             <p>
               Create a new customer job order
             </p>
+
           </div>
+
 
           <button
             type="button"
             className="department-back-button"
             onClick={() =>
-              navigate('/departments/sales')
+              navigate(
+                '/departments/sales',
+              )
             }
           >
             ← Back to Sales
@@ -640,29 +872,42 @@ function JobOrder({ user }: JobOrderProps) {
         ====================================== */}
 
         {!branch && (
+
           <section className="department-content">
 
             <div
               style={{
-                maxWidth: '650px',
-                margin: '0 auto',
+                maxWidth:
+                  '650px',
+
+                margin:
+                  '0 auto',
               }}
             >
 
               <h2
                 style={{
-                  textAlign: 'center',
-                  marginBottom: '8px',
+                  textAlign:
+                    'center',
+
+                  marginBottom:
+                    '8px',
                 }}
               >
                 Select Branch
               </h2>
 
+
               <p
                 style={{
-                  textAlign: 'center',
-                  color: '#64748b',
-                  marginBottom: '30px',
+                  textAlign:
+                    'center',
+
+                  color:
+                    '#64748b',
+
+                  marginBottom:
+                    '30px',
                 }}
               >
                 Select the branch for this job
@@ -672,17 +917,26 @@ function JobOrder({ user }: JobOrderProps) {
 
               <div
                 style={{
-                  display: 'grid',
+                  display:
+                    'grid',
+
                   gridTemplateColumns:
                     'repeat(3, 1fr)',
-                  gap: '15px',
+
+                  gap:
+                    '15px',
                 }}
               >
 
                 {BRANCHES.map(
-                  (branchOption) => (
+                  (
+                    branchOption,
+                  ) => (
+
                     <button
-                      key={branchOption}
+                      key={
+                        branchOption
+                      }
                       type="button"
                       onClick={() =>
                         setBranch(
@@ -690,24 +944,39 @@ function JobOrder({ user }: JobOrderProps) {
                         )
                       }
                       style={{
-                        padding: '25px 15px',
+                        padding:
+                          '25px 15px',
+
                         border:
                           '1px solid #cbd5e1',
-                        borderRadius: '12px',
+
+                        borderRadius:
+                          '12px',
+
                         background:
                           'white',
+
                         color:
                           '#172033',
-                        fontSize: '16px',
-                        fontWeight: 600,
+
+                        fontSize:
+                          '16px',
+
+                        fontWeight:
+                          600,
+
                         cursor:
                           'pointer',
+
                         boxShadow:
                           '0 3px 10px rgba(0,0,0,0.06)',
                       }}
                     >
-                      {branchOption}
+                      {
+                        branchOption
+                      }
                     </button>
+
                   ),
                 )}
 
@@ -716,6 +985,7 @@ function JobOrder({ user }: JobOrderProps) {
             </div>
 
           </section>
+
         )}
 
 
@@ -724,9 +994,13 @@ function JobOrder({ user }: JobOrderProps) {
         ====================================== */}
 
         {branch && (
+
           <form
-            onSubmit={handleSubmit}
+            onSubmit={
+              handleSubmit
+            }
           >
+
 
             {/* =================================
                 SELECTED BRANCH
@@ -736,23 +1010,34 @@ function JobOrder({ user }: JobOrderProps) {
 
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
+
                   justifyContent:
                     'space-between',
-                  alignItems: 'center',
-                  gap: '15px',
-                  flexWrap: 'wrap',
+
+                  alignItems:
+                    'center',
+
+                  gap:
+                    '15px',
+
+                  flexWrap:
+                    'wrap',
                 }}
               >
 
                 <div>
+
                   <h2>
                     Branch
                   </h2>
 
                   <p
                     style={{
-                      margin: '5px 0 0',
+                      margin:
+                        '5px 0 0',
+
                       color:
                         '#64748b',
                     }}
@@ -760,7 +1045,9 @@ function JobOrder({ user }: JobOrderProps) {
                     Job order will be created
                     under this branch.
                   </p>
+
                 </div>
+
 
                 <button
                   type="button"
@@ -774,16 +1061,26 @@ function JobOrder({ user }: JobOrderProps) {
 
               </div>
 
+
               <div
                 style={{
-                  marginTop: '15px',
-                  padding: '14px 18px',
+                  marginTop:
+                    '15px',
+
+                  padding:
+                    '14px 18px',
+
                   background:
                     '#eff6ff',
-                  borderRadius: '10px',
+
+                  borderRadius:
+                    '10px',
+
                   color:
                     '#1d4ed8',
-                  fontWeight: 700,
+
+                  fontWeight:
+                    700,
                 }}
               >
                 {branch}
@@ -802,7 +1099,11 @@ function JobOrder({ user }: JobOrderProps) {
                 1. Customer Details
               </h2>
 
+
               <div className="form-grid">
+
+
+                {/* ENTRY DATE */}
 
                 <div className="input-group">
 
@@ -813,8 +1114,12 @@ function JobOrder({ user }: JobOrderProps) {
                   <input
                     id="date"
                     type="date"
-                    value={date}
-                    onChange={(event) =>
+                    value={
+                      date
+                    }
+                    onChange={(
+                      event,
+                    ) =>
                       setDate(
                         event.target
                           .value,
@@ -824,6 +1129,8 @@ function JobOrder({ user }: JobOrderProps) {
 
                 </div>
 
+
+                {/* EXPECTED DELIVERY */}
 
                 <div className="input-group">
 
@@ -838,7 +1145,9 @@ function JobOrder({ user }: JobOrderProps) {
                     value={
                       expectedDeliveryDate
                     }
-                    onChange={(event) =>
+                    onChange={(
+                      event,
+                    ) =>
                       setExpectedDeliveryDate(
                         event.target
                           .value,
@@ -848,6 +1157,8 @@ function JobOrder({ user }: JobOrderProps) {
 
                 </div>
 
+
+                {/* CUSTOMER NAME */}
 
                 <div className="input-group">
 
@@ -862,7 +1173,9 @@ function JobOrder({ user }: JobOrderProps) {
                     value={
                       customerName
                     }
-                    onChange={(event) =>
+                    onChange={(
+                      event,
+                    ) =>
                       setCustomerName(
                         event.target
                           .value,
@@ -872,6 +1185,8 @@ function JobOrder({ user }: JobOrderProps) {
 
                 </div>
 
+
+                {/* COMPANY */}
 
                 <div className="input-group">
 
@@ -886,7 +1201,9 @@ function JobOrder({ user }: JobOrderProps) {
                     value={
                       companyName
                     }
-                    onChange={(event) =>
+                    onChange={(
+                      event,
+                    ) =>
                       setCompanyName(
                         event.target
                           .value,
@@ -896,6 +1213,8 @@ function JobOrder({ user }: JobOrderProps) {
 
                 </div>
 
+
+                {/* PHONE */}
 
                 <div className="input-group">
 
@@ -910,7 +1229,9 @@ function JobOrder({ user }: JobOrderProps) {
                     value={
                       phoneNumber
                     }
-                    onChange={(event) =>
+                    onChange={(
+                      event,
+                    ) =>
                       setPhoneNumber(
                         event.target
                           .value,
@@ -920,6 +1241,8 @@ function JobOrder({ user }: JobOrderProps) {
 
                 </div>
 
+
+                {/* WHATSAPP */}
 
                 <div className="input-group">
 
@@ -934,7 +1257,9 @@ function JobOrder({ user }: JobOrderProps) {
                     value={
                       whatsappNumber
                     }
-                    onChange={(event) =>
+                    onChange={(
+                      event,
+                    ) =>
                       setWhatsappNumber(
                         event.target
                           .value,
@@ -944,6 +1269,8 @@ function JobOrder({ user }: JobOrderProps) {
 
                 </div>
 
+
+                {/* PLACE */}
 
                 <div className="input-group">
 
@@ -956,7 +1283,9 @@ function JobOrder({ user }: JobOrderProps) {
                     type="text"
                     placeholder="Enter place"
                     value={place}
-                    onChange={(event) =>
+                    onChange={(
+                      event,
+                    ) =>
                       setPlace(
                         event.target
                           .value,
@@ -992,6 +1321,7 @@ function JobOrder({ user }: JobOrderProps) {
 
                 </div>
 
+
                 <button
                   type="button"
                   className="add-item-button"
@@ -1020,6 +1350,7 @@ function JobOrder({ user }: JobOrderProps) {
                     <thead>
 
                       <tr>
+
                         <th>
                           Sl No
                         </th>
@@ -1051,9 +1382,11 @@ function JobOrder({ user }: JobOrderProps) {
                         <th>
                           Action
                         </th>
+
                       </tr>
 
                     </thead>
+
 
                     <tbody>
 
@@ -1070,11 +1403,14 @@ function JobOrder({ user }: JobOrderProps) {
                           >
 
                             <td className="sl-number">
-                              {item.slNo}
+                              {
+                                item.slNo
+                              }
                             </td>
 
 
                             <td>
+
                               <input
                                 type="text"
                                 placeholder="Item name"
@@ -1093,10 +1429,12 @@ function JobOrder({ user }: JobOrderProps) {
                                   )
                                 }
                               />
+
                             </td>
 
 
                             <td>
+
                               <input
                                 type="number"
                                 min="0"
@@ -1117,10 +1455,12 @@ function JobOrder({ user }: JobOrderProps) {
                                   )
                                 }
                               />
+
                             </td>
 
 
                             <td>
+
                               <input
                                 type="number"
                                 min="0"
@@ -1141,10 +1481,12 @@ function JobOrder({ user }: JobOrderProps) {
                                   )
                                 }
                               />
+
                             </td>
 
 
                             <td>
+
                               <input
                                 type="number"
                                 min="1"
@@ -1164,10 +1506,12 @@ function JobOrder({ user }: JobOrderProps) {
                                   )
                                 }
                               />
+
                             </td>
 
 
                             <td>
+
                               <input
                                 type="number"
                                 min="0"
@@ -1188,10 +1532,12 @@ function JobOrder({ user }: JobOrderProps) {
                                   )
                                 }
                               />
+
                             </td>
 
 
                             <td>
+
                               <input
                                 type="text"
                                 placeholder="Remarks"
@@ -1210,6 +1556,7 @@ function JobOrder({ user }: JobOrderProps) {
                                   )
                                 }
                               />
+
                             </td>
 
 
@@ -1255,9 +1602,13 @@ function JobOrder({ user }: JobOrderProps) {
                 3. Office Information
               </h2>
 
+
               <div className="job-options">
 
-                {/* DESIGN */}
+
+                {/* =================================
+                    DESIGN JOB
+                ================================== */}
 
                 <label className="checkbox-option">
 
@@ -1283,7 +1634,9 @@ function JobOrder({ user }: JobOrderProps) {
                 </label>
 
 
-                {/* PRINT */}
+                {/* =================================
+                    PRINT JOB
+                ================================== */}
 
                 <label className="checkbox-option">
 
@@ -1309,7 +1662,9 @@ function JobOrder({ user }: JobOrderProps) {
                 </label>
 
 
-                {/* PRODUCTION */}
+                {/* =================================
+                    PRODUCTION JOB
+                ================================== */}
 
                 <label className="checkbox-option">
 
@@ -1334,6 +1689,34 @@ function JobOrder({ user }: JobOrderProps) {
 
                 </label>
 
+
+                {/* =================================
+                    CUTTING JOB
+                ================================== */}
+
+                <label className="checkbox-option">
+
+                  <input
+                    type="checkbox"
+                    checked={
+                      cuttingJob
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setCuttingJob(
+                        event.target
+                          .checked,
+                      )
+                    }
+                  />
+
+                  <span>
+                    Cutting Job
+                  </span>
+
+                </label>
+
               </div>
 
 
@@ -1348,6 +1731,7 @@ function JobOrder({ user }: JobOrderProps) {
                   <label htmlFor="designer">
                     Select Designer
                   </label>
+
 
                   <select
                     id="designer"
@@ -1373,6 +1757,7 @@ function JobOrder({ user }: JobOrderProps) {
                         : 'Select a designer'}
                     </option>
 
+
                     {designers.map(
                       (
                         designer,
@@ -1383,7 +1768,7 @@ function JobOrder({ user }: JobOrderProps) {
                             designer.id
                           }
                           value={
-                            designer.name 
+                            designer.name
                           }
                         >
                           {
@@ -1429,6 +1814,7 @@ function JobOrder({ user }: JobOrderProps) {
                     Select Print Branch
                   </label>
 
+
                   <select
                     id="printBranch"
                     value={
@@ -1448,6 +1834,7 @@ function JobOrder({ user }: JobOrderProps) {
                     <option value="">
                       Select a print branch
                     </option>
+
 
                     {BRANCHES.map(
                       (
@@ -1487,6 +1874,7 @@ function JobOrder({ user }: JobOrderProps) {
                   Customer Adviser
                 </label>
 
+
                 <input
                   type="text"
                   value={
@@ -1494,6 +1882,7 @@ function JobOrder({ user }: JobOrderProps) {
                   }
                   readOnly
                 />
+
 
                 <small>
                   Logged in as{' '}
@@ -1536,7 +1925,7 @@ function JobOrder({ user }: JobOrderProps) {
 
 
             {/* =================================
-                SUBMIT
+                FORM ACTIONS
             ================================== */}
 
             <div className="form-actions">
@@ -1554,6 +1943,7 @@ function JobOrder({ user }: JobOrderProps) {
                 Cancel
               </button>
 
+
               <button
                 type="submit"
                 className="submit-job-button"
@@ -1567,6 +1957,7 @@ function JobOrder({ user }: JobOrderProps) {
             </div>
 
           </form>
+
         )}
 
       </div>
