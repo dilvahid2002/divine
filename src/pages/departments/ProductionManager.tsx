@@ -1924,5 +1924,4 @@ function ProductionManager({
     </div>
   )
 }
-
 export default ProductionManager
