@@ -26,6 +26,7 @@ const availableRoles = [
   'Production',
   'Production Manager',
   'Sales Manager',
+  'Live Production',
   'Accountant',
   'MD',
   'HR',

@@ -22,6 +22,8 @@ import Accountant from './pages/departments/Accountant'
 import MD from './pages/departments/MD'
 import HR from './pages/departments/HR'
 import Cutting from './pages/departments/cutting'
+import Measurement from './pages/departments/Measurement'
+import LiveProduction from './pages/departments/live-production'
 
 import './App.css'
 
@@ -43,16 +45,19 @@ function DepartmentRoute({
   role,
   children,
 }: DepartmentRouteProps) {
-  /*
-   * Check whether the logged-in user
-   * has access to this department.
-   */
-  if (!user.roles.includes(role)) {
+  const hasAccess = user.roles.some(
+    (userRole) =>
+      userRole.trim().toLowerCase() ===
+      role.trim().toLowerCase(),
+  )
+
+  if (!hasAccess) {
     return <Navigate to="/" replace />
   }
 
   return <>{children}</>
 }
+
 
 function App() {
   const [currentUser, setCurrentUser] =
@@ -78,7 +83,6 @@ function App() {
 
   return (
     <BrowserRouter>
-
       <Routes>
 
         {/* =========================================
@@ -97,7 +101,6 @@ function App() {
           }
         />
 
-
         {/* =========================================
             JOB ORDER
         ========================================== */}
@@ -108,7 +111,6 @@ function App() {
             <JobOrder user={currentUser} />
           }
         />
-
 
         {/* =========================================
             SALES
@@ -126,7 +128,6 @@ function App() {
           }
         />
 
-
         {/* =========================================
             SALES STATISTICS
         ========================================== */}
@@ -139,10 +140,27 @@ function App() {
             />
           }
         />
-      {/*CUtting*/}
-      <Route
-        path="/departments/cutting"
-         element={<Cutting user={currentUser} />}
+
+        {/* =========================================
+            CUTTING
+        ========================================== */}
+
+        <Route
+          path="/departments/cutting"
+          element={
+            <Cutting user={currentUser} />
+          }
+        />
+
+        {/* =========================================
+            MEASUREMENT
+        ========================================== */}
+
+        <Route
+          path="/departments/measurement"
+          element={
+            <Measurement user={currentUser} />
+          }
         />
 
         {/* =========================================
@@ -162,21 +180,22 @@ function App() {
         />
 
 
-        {/* =========================================
-            PRINTER
-        ========================================== */}
+{/* =========================================
+    PRINTER
+========================================= */}
 
-        <Route
-          path="/departments/printer"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Printer"
-            >
-              <Printer />
-            </DepartmentRoute>
-          }
-        />
+<Route
+  path="/departments/printer"
+  element={
+    <DepartmentRoute
+      user={currentUser}
+      role="Printer"
+    >
+      <Printer user={currentUser} />
+    </DepartmentRoute>
+  }
+/>
+
 
 
         {/* =========================================
@@ -190,11 +209,10 @@ function App() {
               user={currentUser}
               role="Production"
             >
-              <Production />
+              <Production user={currentUser} />
             </DepartmentRoute>
           }
         />
-
 
         {/* =========================================
             PRODUCTION MANAGER
@@ -212,7 +230,6 @@ function App() {
           }
         />
 
-
         {/* =========================================
             SALES MANAGER
         ========================================== */}
@@ -228,7 +245,6 @@ function App() {
             </DepartmentRoute>
           }
         />
-
 
         {/* =========================================
             ACCOUNTANT
@@ -246,7 +262,6 @@ function App() {
           }
         />
 
-
         {/* =========================================
             MD
         ========================================== */}
@@ -263,7 +278,6 @@ function App() {
           }
         />
 
-
         {/* =========================================
             HR
         ========================================== */}
@@ -279,7 +293,21 @@ function App() {
             </DepartmentRoute>
           }
         />
+        {/* =========================================
+    LIVE PRODUCTION
+========================================= */}
 
+<Route
+  path="/departments/live-production"
+  element={
+    <DepartmentRoute
+      user={currentUser}
+      role="Live Production"
+    >
+      <LiveProduction user={currentUser} />
+    </DepartmentRoute>
+  }
+/>
 
         {/* =========================================
             UNKNOWN URL
@@ -293,7 +321,6 @@ function App() {
         />
 
       </Routes>
-
     </BrowserRouter>
   )
 }

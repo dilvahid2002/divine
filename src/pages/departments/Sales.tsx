@@ -785,6 +785,18 @@ function Sales({ user }: SalesProps) {
           >
             + Job Order
           </button>
+          
+           <button
+            type="button"
+            className="add-item-button"
+            onClick={() =>
+              navigate(
+                '/departments/Measurement',
+              )
+            }
+          >
+            + Measurement
+          </button>
 
         </div>
 

@@ -1,16 +1,25 @@
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 
-import { useEffect, useMemo, useState } from 'react'
 import {
   collection,
+  doc,
   onSnapshot,
-  orderBy,
-  query,
   Timestamp,
   updateDoc,
-  doc,
 } from 'firebase/firestore'
+
 import { db } from '../../firebase'
+
 import './Department.css'
+
+
+/* =========================================================
+   PROPS
+========================================================= */
 
 interface PrinterProps {
   user?: {
@@ -20,11 +29,30 @@ interface PrinterProps {
   }
 }
 
+
+/* =========================================================
+   FILTER
+========================================================= */
+
 type PrinterFilter =
   | 'all'
   | 'pending'
   | 'today'
   | 'late'
+
+
+/* =========================================================
+   SOURCE TYPE
+========================================================= */
+
+type PrinterSource =
+  | 'measurement'
+  | 'job_order'
+
+
+/* =========================================================
+   ITEM
+========================================================= */
 
 interface PrintItem {
   slNo: number
@@ -34,14 +62,30 @@ interface PrintItem {
   qty: string
   price: string
   remarks: string
+  image?: string
 
-  printStatus?: 'pending' | 'printed' | 'na'
+  printStatus?:
+    | 'pending'
+    | 'printed'
+    | 'na'
 }
 
-interface JobOrder {
+
+/* =========================================================
+   PRINTABLE ORDER
+   ---------------------------------------------------------
+   Both measurements and job_orders are converted into
+   this same structure.
+========================================================= */
+
+interface PrintableOrder {
   id: string
 
+  source: PrinterSource
+
   orderId?: number | string
+
+  measurementId?: string
 
   date: string
 
@@ -64,6 +108,8 @@ interface JobOrder {
     printJob: boolean
     productionJob: boolean
 
+    cuttingJob?: boolean
+
     designer?: string | null
     designerUsername?: string | null
 
@@ -78,7 +124,7 @@ interface JobOrder {
     username: string
   }
 
-  statuses?: {
+  statuses: {
     design:
       | 'Pending'
       | 'In Progress'
@@ -100,32 +146,42 @@ interface JobOrder {
   createdAt?: Timestamp
 }
 
+
+/* =========================================================
+   TODAY
+========================================================= */
+
 const getTodayString = () => {
   const today = new Date()
 
   const year =
     today.getFullYear()
 
-  const month = String(
-    today.getMonth() + 1,
-  ).padStart(2, '0')
+  const month =
+    String(
+      today.getMonth() + 1,
+    ).padStart(2, '0')
 
-  const day = String(
-    today.getDate(),
-  ).padStart(2, '0')
+  const day =
+    String(
+      today.getDate(),
+    ).padStart(2, '0')
 
   return `${year}-${month}-${day}`
 }
+
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 function Printer({
   user,
 }: PrinterProps) {
 
-  /*
-   * =========================================
-   * CURRENT USER
-   * =========================================
-   */
+  /* =======================================================
+     CURRENT USER
+  ======================================================= */
 
   const currentUser = user ?? {
     name: '',
@@ -133,14 +189,13 @@ function Printer({
     roles: [],
   }
 
-  /*
-   * =========================================
-   * STATE
-   * =========================================
-   */
+
+  /* =======================================================
+     STATE
+  ======================================================= */
 
   const [jobOrders, setJobOrders] =
-    useState<JobOrder[]>([])
+    useState<PrintableOrder[]>([])
 
   const [loading, setLoading] =
     useState(true)
@@ -163,73 +218,466 @@ function Printer({
   const [finishingOrder, setFinishingOrder] =
     useState<string | null>(null)
 
-  /*
-   * =========================================
-   * FETCH PRINT JOBS
-   * =========================================
-   */
+
+  /* =======================================================
+     CHECK WHETHER PRINTING IS AVAILABLE
+
+     IMPORTANT:
+
+     Printing is available when:
+
+     1. printJob = true
+
+     AND
+
+     2. designJob = false
+        OR
+        designJob = true AND design is Finished
+
+     Production DOES NOT BLOCK PRINTING.
+
+     This is intentional based on your workflow.
+  ======================================================= */
+
+  const isPrintAvailable = (
+    order: PrintableOrder,
+  ) => {
+
+    /* -----------------------------------------------------
+       PRINT JOB MUST EXIST
+    ----------------------------------------------------- */
+
+    if (
+      order.officeInfo.printJob !== true
+    ) {
+      return false
+    }
+
+
+    /* -----------------------------------------------------
+       DESIGN CHECK
+    -----------------------------------------------------
+
+       NO DESIGN JOB:
+         Printing can start immediately.
+
+       DESIGN JOB:
+         Design must be Finished.
+    ----------------------------------------------------- */
+
+    if (
+      order.officeInfo.designJob === true &&
+      order.statuses.design !== 'Finished'
+    ) {
+      return false
+    }
+
+
+    /* -----------------------------------------------------
+       IMPORTANT
+
+       We intentionally DO NOT check:
+
+       productionJob
+       production status
+
+       because production is not a prerequisite for
+       printing in the workflow you described.
+    ----------------------------------------------------- */
+
+    return true
+  }
+
+
+  /* =======================================================
+     CONVERT FIRESTORE ITEM
+  ======================================================= */
+
+  const normalizeItems = (
+    rawItems: unknown,
+  ): PrintItem[] => {
+
+    if (!Array.isArray(rawItems)) {
+      return []
+    }
+
+    return rawItems.map(
+      (
+        rawItem: any,
+        index: number,
+      ) => {
+
+        return {
+          slNo:
+            typeof rawItem?.slNo === 'number'
+              ? rawItem.slNo
+              : index + 1,
+
+          name:
+            rawItem?.name ?? '',
+
+          width:
+            rawItem?.width ?? '',
+
+          height:
+            rawItem?.height ?? '',
+
+          qty:
+            rawItem?.qty ?? '',
+
+          price:
+            rawItem?.price ?? '',
+
+          remarks:
+            rawItem?.remarks ?? '',
+
+          image:
+            rawItem?.image ?? '',
+
+          /*
+           * Existing records without printStatus
+           * automatically become pending.
+           */
+          printStatus:
+            rawItem?.printStatus ??
+            'pending',
+        }
+      },
+    )
+  }
+
+
+  /* =======================================================
+     READ MEASUREMENTS + JOB ORDERS
+
+     THIS IS THE IMPORTANT PART.
+
+     We explicitly subscribe to:
+
+       1. measurements
+       2. job_orders
+
+     They are completely independent.
+
+     A measurement does NOT need a job_order.
+  ======================================================= */
 
   useEffect(() => {
 
-    const ordersRef =
+    let measurementsLoaded = false
+    let jobOrdersLoaded = false
+
+    let measurementOrders: PrintableOrder[] = []
+    let normalJobOrders: PrintableOrder[] = []
+
+
+    /* =====================================================
+       UPDATE COMBINED LIST
+    ===================================================== */
+
+    const updateCombinedOrders = () => {
+
+      /*
+       * Wait until BOTH collections have loaded.
+       */
+
+      if (
+        !measurementsLoaded ||
+        !jobOrdersLoaded
+      ) {
+        return
+      }
+
+
+      /*
+       * Combine both sources.
+       */
+
+      const combined = [
+        ...measurementOrders,
+        ...normalJobOrders,
+      ]
+
+
+      /*
+       * Newest first.
+       */
+
+      combined.sort(
+        (a, b) => {
+
+          const aTime =
+            a.createdAt?.toMillis?.() ?? 0
+
+          const bTime =
+            b.createdAt?.toMillis?.() ?? 0
+
+          return bTime - aTime
+        },
+      )
+
+
+      setJobOrders(combined)
+
+      setLoading(false)
+
+      setError('')
+    }
+
+
+    /* =====================================================
+       1. READ MEASUREMENTS
+    ===================================================== */
+
+    const measurementsRef =
       collection(
         db,
-        'job_orders',
+        'measurements',
       )
 
-    const ordersQuery =
-      query(
-        ordersRef,
-        orderBy(
-          'createdAt',
-          'desc',
-        ),
-      )
 
-    const unsubscribe =
+    const unsubscribeMeasurements =
       onSnapshot(
-        ordersQuery,
+        measurementsRef,
         (snapshot) => {
 
-          const orders: JobOrder[] =
+          measurementOrders =
             snapshot.docs.map(
               (document) => {
 
                 const data =
                   document.data()
 
-                const rawItems =
-                  Array.isArray(
-                    data.items,
-                  )
-                    ? data.items
-                    : []
 
-                const items: PrintItem[] =
-                  rawItems.map(
-                    (
-                      item: PrintItem,
-                    ) => ({
-                      ...item,
+                /*
+                 * Measurement statuses may not exist
+                 * on older documents.
+                 */
 
-                      /*
-                       * Older orders may not have
-                       * printStatus.
-                       */
-                      printStatus:
-                        item.printStatus ??
-                        'pending',
-                    }),
-                  )
+                const designStatus =
+                  data.statuses?.design ??
+                  'Pending'
 
-                return {
+                const printStatus =
+                  data.statuses?.print ??
+                  'Pending'
+
+                const productionStatus =
+                  data.statuses?.production ??
+                  'Pending'
+
+
+                const order: PrintableOrder = {
+
+                  /*
+                   * IMPORTANT:
+                   * Prefix the ID so a measurement and
+                   * job_order can never collide in React.
+                   */
                   id:
+                    `measurement-${document.id}`,
+
+                  source:
+                    'measurement',
+
+                  measurementId:
+                    data.measurementId ??
                     document.id,
+
+                  date:
+                    data.date ?? '',
+
+                  expectedDeliveryDate:
+                    data.expectedDeliveryDate ??
+                    data.deliveryDate ??
+                    '',
+
+                  branch:
+                    data.branch ??
+                    data.selectedBranch ??
+                    '',
+
+
+                  customer: {
+
+                    name:
+                      data.customer?.name ??
+                      '',
+
+                    companyName:
+                      data.customer?.companyName ??
+                      '',
+
+                    phoneNumber:
+                      data.customer?.phoneNumber ??
+                      '',
+
+                    whatsappNumber:
+                      data.customer?.whatsappNumber ??
+                      '',
+
+                    place:
+                      data.customer?.place ??
+                      '',
+                  },
+
+
+                  items:
+                    normalizeItems(
+                      data.items,
+                    ),
+
+
+                  officeInfo: {
+
+                    designJob:
+                      data.officeInfo?.designJob ??
+                      false,
+
+                    printJob:
+                      data.officeInfo?.printJob ??
+                      false,
+
+                    productionJob:
+                      data.officeInfo?.productionJob ??
+                      false,
+
+                    cuttingJob:
+                      data.officeInfo?.cuttingJob ??
+                      false,
+
+                    designer:
+                      data.officeInfo?.designer ??
+                      null,
+
+                    designerUsername:
+                      data.officeInfo?.designerUsername ??
+                      null,
+
+                    printer:
+                      data.officeInfo?.printer ??
+                      null,
+
+                    printerUsername:
+                      data.officeInfo?.printerUsername ??
+                      null,
+
+                    printBranch:
+                      data.officeInfo?.printBranch ??
+                      null,
+                  },
+
+
+                  customerAdviser: {
+
+                    name:
+                      data.customerAdviser?.name ??
+                      '',
+
+                    username:
+                      data.customerAdviser?.username ??
+                      '',
+                  },
+
+
+                  statuses: {
+
+                    design:
+                      designStatus,
+
+                    print:
+                      printStatus,
+
+                    production:
+                      productionStatus,
+                  },
+
+
+                  delivered:
+                    data.delivered ??
+                    false,
+
+                  createdAt:
+                    data.createdAt,
+                }
+
+
+                return order
+              },
+            )
+
+
+          measurementsLoaded = true
+
+          updateCombinedOrders()
+        },
+        (firebaseError) => {
+
+          console.error(
+            'Error reading measurements:',
+            firebaseError,
+          )
+
+          setError(
+            'Unable to load measurements.',
+          )
+
+          measurementsLoaded = true
+
+          updateCombinedOrders()
+        },
+      )
+
+
+    /* =====================================================
+       2. READ JOB ORDERS
+    ===================================================== */
+
+    const jobOrdersRef =
+      collection(
+        db,
+        'job_orders',
+      )
+
+
+    const unsubscribeJobOrders =
+      onSnapshot(
+        jobOrdersRef,
+        (snapshot) => {
+
+          normalJobOrders =
+            snapshot.docs.map(
+              (document) => {
+
+                const data =
+                  document.data()
+
+
+                const designStatus =
+                  data.statuses?.design ??
+                  'Pending'
+
+                const printStatus =
+                  data.statuses?.print ??
+                  'Pending'
+
+                const productionStatus =
+                  data.statuses?.production ??
+                  'Pending'
+
+
+                const order: PrintableOrder = {
+
+                  id:
+                    `joborder-${document.id}`,
+
+                  source:
+                    'job_order',
 
                   orderId:
                     data.orderId ??
                     data.orderNumber ??
-                    '',
+                    document.id,
 
                   date:
                     data.date ??
@@ -245,105 +693,101 @@ function Printer({
                     data.selectedBranch ??
                     '',
 
+
                   customer: {
+
                     name:
-                      data.customer
-                        ?.name ??
+                      data.customer?.name ??
                       '',
 
                     companyName:
-                      data.customer
-                        ?.companyName ??
+                      data.customer?.companyName ??
                       '',
 
                     phoneNumber:
-                      data.customer
-                        ?.phoneNumber ??
+                      data.customer?.phoneNumber ??
                       '',
 
                     whatsappNumber:
-                      data.customer
-                        ?.whatsappNumber ??
+                      data.customer?.whatsappNumber ??
                       '',
 
                     place:
-                      data.customer
-                        ?.place ??
+                      data.customer?.place ??
                       '',
                   },
 
-                  items,
+
+                  items:
+                    normalizeItems(
+                      data.items,
+                    ),
+
 
                   officeInfo: {
+
                     designJob:
-                      data.officeInfo
-                        ?.designJob ??
+                      data.officeInfo?.designJob ??
                       false,
 
                     printJob:
-                      data.officeInfo
-                        ?.printJob ??
+                      data.officeInfo?.printJob ??
                       false,
 
                     productionJob:
-                      data.officeInfo
-                        ?.productionJob ??
+                      data.officeInfo?.productionJob ??
+                      false,
+
+                    cuttingJob:
+                      data.officeInfo?.cuttingJob ??
                       false,
 
                     designer:
-                      data.officeInfo
-                        ?.designer ??
+                      data.officeInfo?.designer ??
                       null,
 
                     designerUsername:
-                      data.officeInfo
-                        ?.designerUsername ??
+                      data.officeInfo?.designerUsername ??
                       null,
 
                     printer:
-                      data.officeInfo
-                        ?.printer ??
+                      data.officeInfo?.printer ??
                       null,
 
                     printerUsername:
-                      data.officeInfo
-                        ?.printerUsername ??
+                      data.officeInfo?.printerUsername ??
                       null,
 
                     printBranch:
-                      data.officeInfo
-                        ?.printBranch ??
+                      data.officeInfo?.printBranch ??
                       null,
                   },
 
+
                   customerAdviser: {
+
                     name:
-                      data.customerAdviser
-                        ?.name ??
+                      data.customerAdviser?.name ??
                       '',
 
                     username:
-                      data.customerAdviser
-                        ?.username ??
+                      data.customerAdviser?.username ??
                       '',
                   },
 
+
                   statuses: {
+
                     design:
-                      data.statuses
-                        ?.design ??
-                      'Pending',
+                      designStatus,
 
                     print:
-                      data.statuses
-                        ?.print ??
-                      'Pending',
+                      printStatus,
 
                     production:
-                      data.statuses
-                        ?.production ??
-                      'Pending',
+                      productionStatus,
                   },
+
 
                   delivered:
                     data.delivered ??
@@ -352,81 +796,79 @@ function Printer({
                   createdAt:
                     data.createdAt,
                 }
+
+
+                return order
               },
             )
 
-          /*
-           * =====================================
-           * PRINT AVAILABILITY RULE
-           * =====================================
-           *
-           * Print Job must be enabled.
-           *
-           * If Design Job is also enabled,
-           * Design MUST be Finished before
-           * the order becomes visible here.
-           *
-           * If there is no Design Job,
-           * printing is available immediately.
-           */
 
-          const printOrders =
-            orders.filter(
-              (order) => {
+          jobOrdersLoaded = true
 
-                if (
-                  order.officeInfo
-                    .printJob !== true
-                ) {
-                  return false
-                }
-
-                if (
-                  order.officeInfo
-                    .designJob === true
-                ) {
-                  return (
-                    order.statuses
-                      ?.design ===
-                    'Finished'
-                  )
-                }
-
-                return true
-              },
-            )
-
-          setJobOrders(
-            printOrders,
-          )
-
-          setLoading(false)
+          updateCombinedOrders()
         },
         (firebaseError) => {
 
           console.error(
-            'Error fetching printer jobs:',
+            'Error reading job orders:',
             firebaseError,
           )
 
           setError(
-            'Unable to load printer work.',
+            'Unable to load job orders.',
           )
 
-          setLoading(false)
+          jobOrdersLoaded = true
+
+          updateCombinedOrders()
         },
       )
 
-    return () =>
-      unsubscribe()
+
+    /* =====================================================
+       CLEANUP
+    ===================================================== */
+
+    return () => {
+
+      unsubscribeMeasurements()
+
+      unsubscribeJobOrders()
+    }
 
   }, [])
 
-  /*
-   * =========================================
-   * BRANCH LIST
-   * =========================================
-   */
+
+  /* =======================================================
+     ONLY PRINT-AVAILABLE WORK
+
+     This is applied AFTER reading both collections.
+
+     So:
+
+       measurements
+             ↓
+       job_orders
+             ↓
+       combined
+             ↓
+       print availability
+  ======================================================= */
+
+  const printableOrders =
+    useMemo(() => {
+
+      return jobOrders.filter(
+        (order) =>
+          isPrintAvailable(order),
+      )
+
+    }, [jobOrders])
+
+
+  /* =======================================================
+     BRANCH LIST
+  ======================================================= */
 
   const branches =
     useMemo(() => {
@@ -434,7 +876,7 @@ function Printer({
       const uniqueBranches =
         new Set<string>()
 
-      jobOrders.forEach(
+      printableOrders.forEach(
         (order) => {
 
           const branch =
@@ -455,43 +897,40 @@ function Printer({
           a.localeCompare(b),
       )
 
-    }, [jobOrders])
+    }, [printableOrders])
 
-  /*
-   * =========================================
-   * BRANCH FILTERED ORDERS
-   * =========================================
-   */
+
+  /* =======================================================
+     BRANCH FILTER
+  ======================================================= */
 
   const branchFilteredOrders =
     useMemo(() => {
 
       if (
-        selectedBranch ===
-        'all'
+        selectedBranch === 'all'
       ) {
-        return jobOrders
+        return printableOrders
       }
 
-      return jobOrders.filter(
+      return printableOrders.filter(
         (order) =>
           order.branch?.trim() ===
           selectedBranch,
       )
 
     }, [
-      jobOrders,
+      printableOrders,
       selectedBranch,
     ])
 
-  /*
-   * =========================================
-   * ITEM STATE
-   * =========================================
-   */
+
+  /* =======================================================
+     ITEM HELPERS
+  ======================================================= */
 
   const hasStartedPrintWork = (
-    order: JobOrder,
+    order: PrintableOrder,
   ) => {
 
     return order.items.some(
@@ -503,13 +942,13 @@ function Printer({
     )
   }
 
+
   const areAllItemsFinished = (
-    order: JobOrder,
+    order: PrintableOrder,
   ) => {
 
     if (
-      order.items.length ===
-      0
+      order.items.length === 0
     ) {
       return false
     }
@@ -523,19 +962,17 @@ function Printer({
     )
   }
 
-  /*
-   * =========================================
-   * COUNTS
-   * =========================================
-   */
+
+  /* =======================================================
+     COUNTS
+  ======================================================= */
 
   const pendingCount =
     useMemo(() => {
 
       return branchFilteredOrders.filter(
         (order) =>
-          order.statuses
-            ?.print !==
+          order.statuses.print !==
             'Finished' &&
           !areAllItemsFinished(
             order,
@@ -546,6 +983,7 @@ function Printer({
       branchFilteredOrders,
     ])
 
+
   const todayCount =
     useMemo(() => {
 
@@ -554,8 +992,7 @@ function Printer({
 
       return branchFilteredOrders.filter(
         (order) =>
-          order.statuses
-            ?.print !==
+          order.statuses.print !==
             'Finished' &&
           order.expectedDeliveryDate ===
             today,
@@ -565,6 +1002,7 @@ function Printer({
       branchFilteredOrders,
     ])
 
+
   const lateCount =
     useMemo(() => {
 
@@ -573,8 +1011,7 @@ function Printer({
 
       return branchFilteredOrders.filter(
         (order) =>
-          order.statuses
-            ?.print !==
+          order.statuses.print !==
             'Finished' &&
           !!order.expectedDeliveryDate &&
           order.expectedDeliveryDate <
@@ -585,11 +1022,10 @@ function Printer({
       branchFilteredOrders,
     ])
 
-  /*
-   * =========================================
-   * FILTERED ORDERS
-   * =========================================
-   */
+
+  /* =======================================================
+     FILTERED ORDERS
+  ======================================================= */
 
   const filteredOrders =
     useMemo(() => {
@@ -602,43 +1038,47 @@ function Printer({
       ) {
 
         case 'pending':
+
           return branchFilteredOrders.filter(
             (order) =>
-              order.statuses
-                ?.print !==
+              order.statuses.print !==
                 'Finished' &&
               !areAllItemsFinished(
                 order,
               ),
           )
 
+
         case 'today':
+
           return branchFilteredOrders.filter(
             (order) =>
-              order.statuses
-                ?.print !==
+              order.statuses.print !==
                 'Finished' &&
               order.expectedDeliveryDate ===
                 today,
           )
 
+
         case 'late':
+
           return branchFilteredOrders.filter(
             (order) =>
-              order.statuses
-                ?.print !==
+              order.statuses.print !==
                 'Finished' &&
               !!order.expectedDeliveryDate &&
               order.expectedDeliveryDate <
                 today,
           )
 
+
         case 'all':
+
         default:
+
           return branchFilteredOrders.filter(
             (order) =>
-              order.statuses
-                ?.print !==
+              order.statuses.print !==
               'Finished',
           )
       }
@@ -648,52 +1088,129 @@ function Printer({
       activeFilter,
     ])
 
-  /*
-   * =========================================
-   * FILTER CLICK
-   * =========================================
-   */
+
+  /* =======================================================
+     FILTER CLICK
+  ======================================================= */
 
   const handleFilterClick = (
     filter: PrinterFilter,
   ) => {
 
-    setActiveFilter(
-      filter,
-    )
+    setActiveFilter(filter)
 
-    setExpandedOrder(
-      null,
-    )
+    setExpandedOrder(null)
   }
 
-  /*
-   * =========================================
-   * BRANCH CHANGE
-   * =========================================
-   */
+
+  /* =======================================================
+     BRANCH CHANGE
+  ======================================================= */
 
   const handleBranchChange = (
     branch: string,
   ) => {
 
-    setSelectedBranch(
-      branch,
-    )
+    setSelectedBranch(branch)
 
-    setExpandedOrder(
-      null,
+    setExpandedOrder(null)
+  }
+
+
+  /* =======================================================
+     VALIDATE PRINT
+  ======================================================= */
+
+  const validatePrintPrerequisites = (
+    order: PrintableOrder,
+  ) => {
+
+    /* -----------------------------------------------------
+       PRINT JOB
+    ----------------------------------------------------- */
+
+    if (
+      order.officeInfo.printJob !== true
+    ) {
+
+      alert(
+        'This file does not have a print job.',
+      )
+
+      return false
+    }
+
+
+    /* -----------------------------------------------------
+       DESIGN
+    ----------------------------------------------------- */
+
+    if (
+      order.officeInfo.designJob === true &&
+      order.statuses.design !== 'Finished'
+    ) {
+
+      alert(
+        'Printing cannot start until the design is finished.',
+      )
+
+      return false
+    }
+
+
+    /*
+     * NO PRODUCTION CHECK HERE.
+     *
+     * Production does not block printing.
+     */
+
+    return true
+  }
+
+
+  /* =======================================================
+     GET FIRESTORE DOCUMENT ID
+  ======================================================= */
+
+  const getFirestoreDocumentId = (
+    order: PrintableOrder,
+  ) => {
+
+    /*
+     * Our local React ID is:
+
+       measurement-ABC
+       joborder-XYZ
+
+     * We need the original Firestore ID.
+     */
+
+    if (
+      order.id.startsWith(
+        'measurement-',
+      )
+    ) {
+
+      return order.id.replace(
+        'measurement-',
+        '',
+      )
+    }
+
+
+    return order.id.replace(
+      'joborder-',
+      '',
     )
   }
 
-  /*
-   * =========================================
-   * UPDATE ITEM PRINT STATUS
-   * =========================================
-   */
+
+  /* =======================================================
+     UPDATE ITEM PRINT STATUS
+  ======================================================= */
 
   const handleItemStatus = async (
-    order: JobOrder,
+    order: PrintableOrder,
     itemIndex: number,
     status:
       | 'printed'
@@ -703,30 +1220,51 @@ function Printer({
     const itemKey =
       `${order.id}-${itemIndex}`
 
+
     if (
-      savingItem ===
-      itemKey
+      savingItem === itemKey
     ) {
       return
     }
 
+
     /*
-     * Once printing work is finished,
-     * no further changes are allowed.
+     * Cannot change after print is finished.
      */
 
     if (
-      order.statuses?.print ===
+      order.statuses.print ===
       'Finished'
     ) {
       return
     }
 
+
+    /*
+     * Check design/print rules.
+     */
+
+    if (
+      !validatePrintPrerequisites(
+        order,
+      )
+    ) {
+      return
+    }
+
+
     const currentItem =
       order.items[itemIndex]
 
+
+    if (!currentItem) {
+      return
+    }
+
+
     /*
-     * Completed items cannot be changed.
+     * Once an item has been completed,
+     * it cannot be changed.
      */
 
     if (
@@ -738,25 +1276,10 @@ function Printer({
       return
     }
 
+
     /*
-     * Make sure design is completed
-     * when a design job exists.
+     * Update only this item.
      */
-
-    if (
-      order.officeInfo
-        .designJob === true &&
-      order.statuses
-        ?.design !==
-        'Finished'
-    ) {
-
-      alert(
-        'Printing cannot start until the design is finished.',
-      )
-
-      return
-    }
 
     const updatedItems =
       order.items.map(
@@ -764,8 +1287,7 @@ function Printer({
           item,
           index,
         ) =>
-          index ===
-          itemIndex
+          index === itemIndex
             ? {
                 ...item,
                 printStatus:
@@ -774,32 +1296,50 @@ function Printer({
             : item,
       )
 
-    setSavingItem(
-      itemKey,
-    )
+
+    setSavingItem(itemKey)
 
     setError('')
 
+
     try {
+
+      const firestoreId =
+        getFirestoreDocumentId(
+          order,
+        )
+
+
+      const collectionName =
+        order.source ===
+        'measurement'
+          ? 'measurements'
+          : 'job_orders'
+
+
+      /*
+       * BOTH types are updated correctly:
+
+       measurements/{id}
+
+       OR
+
+       job_orders/{id}
+       */
 
       await updateDoc(
         doc(
           db,
-          'job_orders',
-          order.id,
+          collectionName,
+          firestoreId,
         ),
         {
-
           items:
             updatedItems,
 
           'statuses.print':
             'In Progress',
 
-          /*
-           * Automatically record the
-           * printer when work starts.
-           */
           'officeInfo.printer':
             currentUser.name,
 
@@ -823,22 +1363,36 @@ function Printer({
 
     } finally {
 
-      setSavingItem(
-        null,
-      )
+      setSavingItem(null)
     }
   }
 
-  /*
-   * =========================================
-   * FINISH PRINTING
-   * =========================================
-   */
+
+  /* =======================================================
+     FINISH PRINTING
+  ======================================================= */
 
   const handleFinishPrinting =
     async (
-      order: JobOrder,
+      order: PrintableOrder,
     ) => {
+
+      /*
+       * Validate again.
+       */
+
+      if (
+        !validatePrintPrerequisites(
+          order,
+        )
+      ) {
+        return
+      }
+
+
+      /*
+       * Every item must be finished.
+       */
 
       if (
         !areAllItemsFinished(
@@ -853,6 +1407,7 @@ function Printer({
         return
       }
 
+
       if (
         finishingOrder ===
         order.id
@@ -860,25 +1415,6 @@ function Printer({
         return
       }
 
-      /*
-       * Design must be finished when
-       * the order has a design job.
-       */
-
-      if (
-        order.officeInfo
-          .designJob === true &&
-        order.statuses
-          ?.design !==
-        'Finished'
-      ) {
-
-        alert(
-          'Printing cannot be finished until the design is finished.',
-        )
-
-        return
-      }
 
       setFinishingOrder(
         order.id,
@@ -886,13 +1422,32 @@ function Printer({
 
       setError('')
 
+
       try {
+
+        const firestoreId =
+          getFirestoreDocumentId(
+            order,
+          )
+
+
+        const collectionName =
+          order.source ===
+          'measurement'
+            ? 'measurements'
+            : 'job_orders'
+
+
+        /*
+         * Save the finished status into
+         * the correct collection.
+         */
 
         await updateDoc(
           doc(
             db,
-            'job_orders',
-            order.id,
+            collectionName,
+            firestoreId,
           ),
           {
 
@@ -902,11 +1457,6 @@ function Printer({
             'statuses.print':
               'Finished',
 
-            /*
-             * IMPORTANT:
-             * Save the user who actually
-             * finished the printing.
-             */
             'officeInfo.printer':
               currentUser.name,
 
@@ -915,9 +1465,8 @@ function Printer({
           },
         )
 
-        setExpandedOrder(
-          null,
-        )
+
+        setExpandedOrder(null)
 
       } catch (
         firebaseError
@@ -940,43 +1489,79 @@ function Printer({
       }
     }
 
-  /*
-   * =========================================
-   * ORDER ID
-   * =========================================
-   */
 
-  const getOrderId = (
-    order: JobOrder,
+  /* =======================================================
+     DISPLAY ID
+  ======================================================= */
+
+  const getDisplayId = (
+    order: PrintableOrder,
   ) => {
+
+    /*
+     * Measurement:
+     * M/1
+     * M/2
+     *
+     * Job Order:
+     * existing order ID
+     */
+
+    if (
+      order.source ===
+      'measurement'
+    ) {
+
+      return (
+        order.measurementId ||
+        order.id
+      )
+    }
+
 
     if (
       order.orderId !==
         undefined &&
-      order.orderId !==
-        ''
+      order.orderId !== ''
     ) {
 
       return order.orderId
     }
 
+
     return order.id
   }
 
-  /*
-   * =========================================
-   * PAGE
-   * =========================================
-   */
+
+  /* =======================================================
+     SOURCE LABEL
+  ======================================================= */
+
+  const getSourceLabel = (
+    order: PrintableOrder,
+  ) => {
+
+    return order.source ===
+      'measurement'
+      ? 'Measurement'
+      : 'Job Order'
+  }
+
+
+  /* =======================================================
+     PAGE
+  ======================================================= */
 
   return (
+
     <div className="department-page">
 
       <div className="department-container">
 
-        {/* =====================================
+
+        {/* =================================================
             HEADER
-        ====================================== */}
+        ================================================= */}
 
         <div className="department-header">
 
@@ -987,8 +1572,8 @@ function Printer({
             </h1>
 
             <p>
-              Printing work • Design
-              must be finished first
+              Printing work from Measurements
+              and Job Orders
             </p>
 
           </div>
@@ -996,27 +1581,30 @@ function Printer({
         </div>
 
 
-        {/* =====================================
+        {/* =================================================
             ERROR
-        ====================================== */}
+        ================================================= */}
 
         {error && (
+
           <div className="form-message">
             {error}
           </div>
+
         )}
 
 
-        {/* =====================================
+        {/* =================================================
             BRANCH FILTER
-        ====================================== */}
+        ================================================= */}
 
         <div
           className="statistics-filter-bar"
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent:
+              'space-between',
             gap: '16px',
             flexWrap: 'wrap',
           }}
@@ -1064,14 +1652,17 @@ function Printer({
               All Branches
             </option>
 
+
             {branches.map(
               (branch) => (
+
                 <option
                   key={branch}
                   value={branch}
                 >
                   {branch}
                 </option>
+
               ),
             )}
 
@@ -1080,19 +1671,19 @@ function Printer({
         </div>
 
 
-        {/* =====================================
+        {/* =================================================
             DASHBOARD FILTERS
-        ====================================== */}
+        ================================================= */}
 
         <div className="statistics-dashboard">
+
 
           {/* ALL */}
 
           <button
             type="button"
             className={
-              activeFilter ===
-              'all'
+              activeFilter === 'all'
                 ? 'statistics-card selected'
                 : 'statistics-card'
             }
@@ -1108,18 +1699,19 @@ function Printer({
             </div>
 
             <div className="statistics-card-value">
+
               {
                 branchFilteredOrders.filter(
                   (order) =>
-                    order.statuses
-                      ?.print !==
+                    order.statuses.print !==
                     'Finished',
                 ).length
               }
+
             </div>
 
             <div className="statistics-card-help">
-              Available print orders
+              Measurements + Job Orders
             </div>
 
           </button>
@@ -1130,8 +1722,7 @@ function Printer({
           <button
             type="button"
             className={
-              activeFilter ===
-              'pending'
+              activeFilter === 'pending'
                 ? 'statistics-card selected'
                 : 'statistics-card'
             }
@@ -1147,9 +1738,7 @@ function Printer({
             </div>
 
             <div className="statistics-card-value">
-              {
-                pendingCount
-              }
+              {pendingCount}
             </div>
 
             <div className="statistics-card-help">
@@ -1164,8 +1753,7 @@ function Printer({
           <button
             type="button"
             className={
-              activeFilter ===
-              'today'
+              activeFilter === 'today'
                 ? 'statistics-card selected'
                 : 'statistics-card'
             }
@@ -1181,9 +1769,7 @@ function Printer({
             </div>
 
             <div className="statistics-card-value">
-              {
-                todayCount
-              }
+              {todayCount}
             </div>
 
             <div className="statistics-card-help">
@@ -1198,8 +1784,7 @@ function Printer({
           <button
             type="button"
             className={
-              activeFilter ===
-              'late'
+              activeFilter === 'late'
                 ? 'statistics-card selected'
                 : 'statistics-card'
             }
@@ -1215,9 +1800,7 @@ function Printer({
             </div>
 
             <div className="statistics-card-value">
-              {
-                lateCount
-              }
+              {lateCount}
             </div>
 
             <div className="statistics-card-help">
@@ -1229,9 +1812,9 @@ function Printer({
         </div>
 
 
-        {/* =====================================
+        {/* =================================================
             CURRENT FILTER
-        ====================================== */}
+        ================================================= */}
 
         <div className="statistics-filter-bar">
 
@@ -1261,16 +1844,18 @@ function Printer({
 
             <span>
 
-              {activeFilter ===
-              'pending'
-                ? ' Pending'
-                : activeFilter ===
-                    'today'
-                  ? ' Must Finish Today'
+              {
+                activeFilter ===
+                'pending'
+                  ? ' Pending'
                   : activeFilter ===
-                      'late'
-                    ? ' Late'
-                    : ' All Work'}
+                      'today'
+                    ? ' Must Finish Today'
+                    : activeFilter ===
+                        'late'
+                      ? ' Late'
+                      : ' All Work'
+              }
 
             </span>
 
@@ -1279,9 +1864,9 @@ function Printer({
         </div>
 
 
-        {/* =====================================
-            ORDERS
-        ====================================== */}
+        {/* =================================================
+            PRINT WORK
+        ================================================= */}
 
         <div className="department-section">
 
@@ -1294,17 +1879,21 @@ function Printer({
               </h2>
 
               <p>
+
                 {
                   filteredOrders.length
                 }{' '}
-                order
+
+                file
                 {
                   filteredOrders.length !==
                   1
                     ? 's'
                     : ''
-                }{' '}
-                found
+                }
+
+                {' '}found
+
               </p>
 
             </div>
@@ -1312,16 +1901,28 @@ function Printer({
           </div>
 
 
+          {/* =================================================
+              LOADING
+          ================================================= */}
+
           {loading && (
+
             <div className="empty-items">
-              Loading print work...
+
+              Loading measurements
+              and job orders...
+
             </div>
+
           )}
 
 
+          {/* =================================================
+              EMPTY
+          ================================================= */}
+
           {!loading &&
-            filteredOrders.length ===
-              0 && (
+            filteredOrders.length === 0 && (
 
               <div className="empty-items">
 
@@ -1330,52 +1931,50 @@ function Printer({
                 </h3>
 
                 <p>
-                  There are no print
-                  orders matching the
-                  selected branch and
-                  filter.
+
+                  There are no printable
+                  Measurements or Job Orders
+                  matching the selected filter.
+
                 </p>
 
               </div>
+
             )}
 
 
+          {/* =================================================
+              ORDERS
+          ================================================= */}
+
           {!loading &&
-            filteredOrders.length >
-              0 && (
+            filteredOrders.length > 0 && (
 
               <div className="statistics-orders-list">
 
                 {filteredOrders.map(
-                  (
-                    order,
-                  ) => {
+                  (order) => {
 
                     const isExpanded =
                       expandedOrder ===
                       order.id
 
-                    const workStarted =
-                      hasStartedPrintWork(
-                        order,
-                      )
 
                     const allItemsDone =
                       areAllItemsFinished(
                         order,
                       )
 
+
                     const printFinished =
-                      order.statuses
-                        ?.print ===
+                      order.statuses.print ===
                       'Finished'
+
 
                     return (
 
                       <div
-                        key={
-                          order.id
-                        }
+                        key={order.id}
                         className={
                           printFinished
                             ? 'statistics-order-card delivered'
@@ -1383,39 +1982,62 @@ function Printer({
                         }
                       >
 
+
                         {/* =================================
-                            ORDER HEADER
-                        ================================== */}
+                            HEADER
+                        ================================= */}
 
                         <div className="statistics-order-header">
 
                           <div>
 
-                            <div className="job-order-id">
-                              Order ID:{' '}
-                              {
-                                getOrderId(
+                            <div
+                              className="job-order-id"
+                              style={{
+                                display:
+                                  'flex',
+                                gap:
+                                  '8px',
+                                alignItems:
+                                  'center',
+                                flexWrap:
+                                  'wrap',
+                              }}
+                            >
+
+                              <span>
+                                {getSourceLabel(
                                   order,
-                                )
-                              }
+                                )}
+                              </span>
+
+                              <span>
+                                ID:{' '}
+                                {getDisplayId(
+                                  order,
+                                )}
+                              </span>
+
                             </div>
 
+
                             <h3>
+
                               {
-                                order
-                                  .customer
-                                  .name ||
+                                order.customer.name ||
                                 'Unnamed Customer'
                               }
+
                             </h3>
 
+
                             <p>
+
                               {
-                                order
-                                  .customer
-                                  .companyName ||
+                                order.customer.companyName ||
                                 'No company name'
                               }
+
                             </p>
 
                           </div>
@@ -1424,30 +2046,38 @@ function Printer({
                           <div className="statistics-order-meta">
 
                             <span>
+
                               Branch:{' '}
+
                               {
                                 order.branch ||
                                 '-'
                               }
+
                             </span>
 
+
                             <span>
+
                               Delivery:{' '}
+
                               {
-                                order
-                                  .expectedDeliveryDate ||
+                                order.expectedDeliveryDate ||
                                 '-'
                               }
+
                             </span>
 
+
                             <span>
+
                               Printer:{' '}
+
                               {
-                                order
-                                  .officeInfo
-                                  .printer ||
+                                order.officeInfo.printer ||
                                 'Not started'
                               }
+
                             </span>
 
                           </div>
@@ -1457,9 +2087,25 @@ function Printer({
 
                         {/* =================================
                             SUMMARY
-                        ================================== */}
+                        ================================= */}
 
                         <div className="statistics-order-summary">
+
+
+                          <div>
+
+                            <strong>
+                              Source
+                            </strong>
+
+                            <span>
+                              {getSourceLabel(
+                                order,
+                              )}
+                            </span>
+
+                          </div>
+
 
                           <div>
 
@@ -1468,12 +2114,12 @@ function Printer({
                             </strong>
 
                             <span>
+
                               {
-                                order
-                                  .customerAdviser
-                                  .name ||
+                                order.customerAdviser.name ||
                                 '-'
                               }
+
                             </span>
 
                           </div>
@@ -1486,12 +2132,13 @@ function Printer({
                             </strong>
 
                             <span>
+
                               {
-                                order
-                                  .statuses
-                                  ?.design ||
-                                'Pending'
+                                order.officeInfo.designJob
+                                  ? order.statuses.design
+                                  : 'No Design Job'
                               }
+
                             </span>
 
                           </div>
@@ -1505,10 +2152,7 @@ function Printer({
 
                             <span>
                               {
-                                order
-                                  .statuses
-                                  ?.print ||
-                                'Pending'
+                                order.statuses.print
                               }
                             </span>
 
@@ -1523,8 +2167,7 @@ function Printer({
 
                             <span>
                               {
-                                order.items
-                                  .length
+                                order.items.length
                               }
                             </span>
 
@@ -1535,11 +2178,9 @@ function Printer({
 
                         {/* =================================
                             ACTIONS
-                        ================================== */}
+                        ================================= */}
 
                         <div className="statistics-order-actions">
-
-                          {/* VIEW */}
 
                           <button
                             type="button"
@@ -1553,14 +2194,14 @@ function Printer({
                             }
                           >
 
-                            {isExpanded
-                              ? 'Hide Details'
-                              : 'View Details'}
+                            {
+                              isExpanded
+                                ? 'Hide Details'
+                                : 'View Details'
+                            }
 
                           </button>
 
-
-                          {/* FINISH */}
 
                           {!printFinished && (
 
@@ -1581,11 +2222,6 @@ function Printer({
                                   order,
                                 )
                               }
-                              title={
-                                allItemsDone
-                                  ? 'Finish printing'
-                                  : 'Complete all items first'
-                              }
                             >
 
                               {
@@ -1605,20 +2241,25 @@ function Printer({
 
 
                         {/* =================================
-                            EXPANDED DETAILS
-                        ================================== */}
+                            DETAILS
+                        ================================= */}
 
                         {isExpanded && (
 
                           <div className="statistics-order-details">
 
-                            {/* CUSTOMER */}
+
+                            {/* =================================
+                                CUSTOMER
+                            ================================= */}
 
                             <h4>
                               Customer Details
                             </h4>
 
+
                             <div className="details-grid">
+
 
                               <div>
 
@@ -1628,9 +2269,7 @@ function Printer({
 
                                 <span>
                                   {
-                                    order
-                                      .customer
-                                      .name ||
+                                    order.customer.name ||
                                     '-'
                                   }
                                 </span>
@@ -1646,9 +2285,7 @@ function Printer({
 
                                 <span>
                                   {
-                                    order
-                                      .customer
-                                      .companyName ||
+                                    order.customer.companyName ||
                                     '-'
                                   }
                                 </span>
@@ -1664,9 +2301,7 @@ function Printer({
 
                                 <span>
                                   {
-                                    order
-                                      .customer
-                                      .phoneNumber ||
+                                    order.customer.phoneNumber ||
                                     '-'
                                   }
                                 </span>
@@ -1682,9 +2317,7 @@ function Printer({
 
                                 <span>
                                   {
-                                    order
-                                      .customer
-                                      .whatsappNumber ||
+                                    order.customer.whatsappNumber ||
                                     '-'
                                   }
                                 </span>
@@ -1700,9 +2333,7 @@ function Printer({
 
                                 <span>
                                   {
-                                    order
-                                      .customer
-                                      .place ||
+                                    order.customer.place ||
                                     '-'
                                   }
                                 </span>
@@ -1718,10 +2349,42 @@ function Printer({
 
                                 <span>
                                   {
-                                    order
-                                      .officeInfo
-                                      .designer ||
+                                    order.officeInfo.designer ||
                                     '-'
+                                  }
+                                </span>
+
+                              </div>
+
+
+                              <div>
+
+                                <strong>
+                                  Design Job
+                                </strong>
+
+                                <span>
+                                  {
+                                    order.officeInfo.designJob
+                                      ? order.statuses.design
+                                      : 'No Design Job'
+                                  }
+                                </span>
+
+                              </div>
+
+
+                              <div>
+
+                                <strong>
+                                  Production
+                                </strong>
+
+                                <span>
+                                  {
+                                    order.officeInfo.productionJob
+                                      ? order.statuses.production
+                                      : 'No Production Job'
                                   }
                                 </span>
 
@@ -1736,9 +2399,7 @@ function Printer({
 
                                 <span>
                                   {
-                                    order
-                                      .officeInfo
-                                      .printer ||
+                                    order.officeInfo.printer ||
                                     'Not started'
                                   }
                                 </span>
@@ -1748,11 +2409,14 @@ function Printer({
                             </div>
 
 
-                            {/* ITEMS */}
+                            {/* =================================
+                                ITEMS
+                            ================================= */}
 
                             <h4>
                               Items for Printing
                             </h4>
+
 
                             <div className="items-table-wrapper">
 
@@ -1787,6 +2451,10 @@ function Printer({
                                     </th>
 
                                     <th>
+                                      Image
+                                    </th>
+
+                                    <th>
                                       Printing
                                     </th>
 
@@ -1806,13 +2474,16 @@ function Printer({
                                       const itemKey =
                                         `${order.id}-${itemIndex}`
 
+
                                       const itemPrinted =
                                         item.printStatus ===
                                         'printed'
 
+
                                       const itemNA =
                                         item.printStatus ===
                                         'na'
+
 
                                       return (
 
@@ -1822,58 +2493,130 @@ function Printer({
                                           }
                                         >
 
+
+                                          {/* # */}
+
                                           <td className="sl-number">
+
                                             {
                                               item.slNo ??
-                                              itemIndex +
-                                                1
+                                              itemIndex + 1
                                             }
+
                                           </td>
 
+
+                                          {/* ITEM */}
 
                                           <td>
 
                                             <strong>
+
                                               {
                                                 item.name ||
                                                 '-'
                                               }
+
                                             </strong>
 
                                           </td>
 
 
+                                          {/* WIDTH */}
+
                                           <td>
+
                                             {
                                               item.width ||
                                               '-'
                                             }
+
                                           </td>
 
 
+                                          {/* HEIGHT */}
+
                                           <td>
+
                                             {
                                               item.height ||
                                               '-'
                                             }
+
                                           </td>
 
 
+                                          {/* QTY */}
+
                                           <td>
+
                                             {
                                               item.qty ||
                                               '-'
                                             }
+
                                           </td>
 
 
+                                          {/* REMARKS */}
+
                                           <td>
+
                                             {
                                               item.remarks ||
                                               '-'
                                             }
+
                                           </td>
 
+
+                                          {/* IMAGE */}
+
+                                          <td>
+
+                                            {item.image ? (
+
+                                              <img
+                                                src={
+                                                  item.image
+                                                }
+                                                alt={
+                                                  item.name ||
+                                                  `Item ${itemIndex + 1}`
+                                                }
+                                                style={{
+                                                  width:
+                                                    '70px',
+                                                  height:
+                                                    '70px',
+                                                  objectFit:
+                                                    'cover',
+                                                  borderRadius:
+                                                    '8px',
+                                                  border:
+                                                    '1px solid #cbd5e1',
+                                                }}
+                                              />
+
+                                            ) : (
+
+                                              <span
+                                                style={{
+                                                  color:
+                                                    '#94a3b8',
+                                                  fontSize:
+                                                    '12px',
+                                                }}
+                                              >
+                                                No image
+                                              </span>
+
+                                            )}
+
+                                          </td>
+
+
+                                          {/* PRINT STATUS */}
 
                                           <td>
 
@@ -1887,6 +2630,7 @@ function Printer({
                                                   'wrap',
                                               }}
                                             >
+
 
                                               {/* NA */}
 
@@ -1972,8 +2716,6 @@ function Printer({
                                             </div>
 
 
-                                            {/* ITEM STATUS */}
-
                                             <div
                                               style={{
                                                 marginTop:
@@ -1991,17 +2733,20 @@ function Printer({
                                               }}
                                             >
 
-                                              {itemPrinted
-                                                ? 'Printed'
-                                                : itemNA
-                                                  ? 'Print NA'
-                                                  : 'Pending'}
+                                              {
+                                                itemPrinted
+                                                  ? 'Printed'
+                                                  : itemNA
+                                                    ? 'Print NA'
+                                                    : 'Pending'
+                                              }
 
                                             </div>
 
                                           </td>
 
                                         </tr>
+
                                       )
                                     },
                                   )}
@@ -2013,7 +2758,9 @@ function Printer({
                             </div>
 
 
-                            {/* PROGRESS */}
+                            {/* =================================
+                                PROGRESS
+                            ================================= */}
 
                             <div
                               style={{
@@ -2036,6 +2783,7 @@ function Printer({
                                 Printing Progress
                               </strong>
 
+
                               <p
                                 style={{
                                   margin:
@@ -2045,23 +2793,28 @@ function Printer({
                                 }}
                               >
 
-                                {allItemsDone
-                                  ? 'All items are Printed or NA. Printing can now be finished.'
-                                  : 'Every item must be marked ✓ Printed or NA before the print order can be finished.'}
+                                {
+                                  allItemsDone
+                                    ? 'All items are Printed or NA. Printing can now be finished.'
+                                    : 'Every item must be marked ✓ Printed or NA before the print order can be finished.'
+                                }
 
                               </p>
 
                             </div>
 
                           </div>
+
                         )}
 
                       </div>
+
                     )
                   },
                 )}
 
               </div>
+
             )}
 
         </div>
@@ -2071,5 +2824,6 @@ function Printer({
     </div>
   )
 }
+
 
 export default Printer

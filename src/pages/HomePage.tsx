@@ -57,6 +57,9 @@ const departmentPaths: Record<string, string> = {
   MD: '/departments/md',
 
   HR: '/departments/hr',
+
+  'Live Production':
+    '/departments/live-production',
 }
 
 /*
@@ -77,14 +80,13 @@ function HomePage({
    *
    * Case-insensitive role checking.
    *
-   * Therefore all of these work:
+   * Examples:
    *
-   * "Cutting"
-   * "cutting"
-   * "CUTTING"
+   * "Live Production"
+   * "live production"
+   * "LIVE PRODUCTION"
    *
-   * This is useful because older Firebase
-   * users may have different capitalization.
+   * All will work.
    */
 
   const hasRole = (role: string) => {
@@ -104,6 +106,10 @@ function HomePage({
   const handleDepartmentClick = (
     role: string,
   ) => {
+    if (!hasRole(role)) {
+      return
+    }
+
     const path =
       departmentPaths[role]
 
@@ -155,7 +161,12 @@ function HomePage({
         </div>
 
         <div className="user-info">
-          {user.username}
+          <button
+            type="button"
+            className="user-info"
+          >
+            {user.name}
+          </button>
         </div>
 
       </header>
@@ -197,7 +208,6 @@ function HomePage({
           {(() => {
 
             const role = 'Sales'
-
             const isActive =
               hasRole(role)
 
@@ -263,6 +273,54 @@ function HomePage({
             </div>
 
           </button>
+
+
+          {/* =======================================
+              LIVE PRODUCTION
+          ======================================== */}
+
+          {(() => {
+
+            const role = 'Live Production'
+
+            const isActive =
+              hasRole(role)
+
+            return (
+              <button
+                key={role}
+                type="button"
+                className={`department-card ${
+                  isActive
+                    ? 'active'
+                    : 'disabled'
+                }`}
+                disabled={!isActive}
+                onClick={() =>
+                  handleDepartmentClick(
+                    role,
+                  )
+                }
+              >
+
+                <div className="department-icon">
+                  {role.charAt(0)}
+                </div>
+
+                <div className="department-name">
+                  {role}
+                </div>
+
+                <div className="department-status">
+                  {isActive
+                    ? 'Available'
+                    : 'No Access'}
+                </div>
+
+              </button>
+            )
+
+          })()}
 
 
           {/* =======================================

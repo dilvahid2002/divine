@@ -90,7 +90,7 @@ function LoginPage({ onLogin }: LoginPageProps) {
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1>Work Manager</h1>
+        <h1>DIVINE SIGNAGE <br /> Work Manager</h1>
 
         <p className="login-subtitle">
           Sign in to continue

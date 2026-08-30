@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react'
 import {
   collection,
@@ -25,19 +26,66 @@ type CuttingFilter =
   | 'today'
   | 'late'
 
-interface CuttingItem {
-  slNo: number
-  name: string
-  width: string
-  height: string
-  qty: string
-  price: string
-  remarks: string
+type CuttingStatus =
+  | 'pending'
+  | 'finished'
+  | 'na'
 
-  cuttingStatus?:
-    | 'pending'
-    | 'finished'
-    | 'na'
+/*
+ * =========================================
+ * MEASUREMENT TYPES
+ * =========================================
+ */
+
+interface MeasurementData {
+  width?: string
+  height?: string
+  length?: string
+  breadth?: string
+  depth?: string
+  unit?: string
+  area?: string
+  quantity?: string
+  qty?: string
+
+  [key: string]: unknown
+}
+
+interface CuttingItem {
+  slNo?: number
+
+  name?: string
+
+  /*
+   * Direct fields
+   */
+  width?: string | number
+  height?: string | number
+  length?: string | number
+  breadth?: string | number
+  depth?: string | number
+
+  qty?: string | number
+  quantity?: string | number
+
+  price?: string | number
+
+  remarks?: string
+
+  /*
+   * Possible measurement structures
+   */
+  measurement?: MeasurementData | string | null
+  measurements?: MeasurementData | string | null
+  dimensions?: MeasurementData | string | null
+  size?: MeasurementData | string | null
+
+  /*
+   * Keep any additional Firestore fields.
+   */
+  [key: string]: unknown
+
+  cuttingStatus?: CuttingStatus
 }
 
 interface JobOrder {
@@ -108,6 +156,12 @@ interface JobOrder {
   createdAt?: Timestamp
 }
 
+/*
+ * =========================================
+ * DATE
+ * =========================================
+ */
+
 const getTodayString = () => {
   const today = new Date()
 
@@ -124,6 +178,493 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`
 }
 
+/*
+ * =========================================
+ * SAFE VALUE
+ * =========================================
+ */
+
+const valueToString = (
+  value: unknown,
+): string => {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return ''
+  }
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number'
+  ) {
+    return String(value)
+  }
+
+  return ''
+}
+
+/*
+ * =========================================
+ * OBJECT CHECK
+ * =========================================
+ */
+
+const isObject = (
+  value: unknown,
+): value is Record<string, unknown> => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value)
+  )
+}
+
+/*
+ * =========================================
+ * FIND VALUE IN OBJECT
+ * =========================================
+ *
+ * This recursively searches measurement
+ * objects for common field names.
+ */
+
+const findNestedValue = (
+  source: unknown,
+  keys: string[],
+): string => {
+  if (!isObject(source)) {
+    return ''
+  }
+
+  /*
+   * First check the current object.
+   */
+
+  for (const key of keys) {
+    const value = source[key]
+
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ''
+    ) {
+      const result =
+        valueToString(value)
+
+      if (result) {
+        return result
+      }
+    }
+  }
+
+  /*
+   * Then search nested objects.
+   */
+
+  for (const value of Object.values(
+    source,
+  )) {
+    if (isObject(value)) {
+      const result =
+        findNestedValue(
+          value,
+          keys,
+        )
+
+      if (result) {
+        return result
+      }
+    }
+  }
+
+  return ''
+}
+
+/*
+ * =========================================
+ * PARSE POSSIBLE JSON MEASUREMENT
+ * =========================================
+ */
+
+const parsePossibleObject = (
+  value: unknown,
+): unknown => {
+  if (
+    typeof value !== 'string'
+  ) {
+    return value
+  }
+
+  const trimmed =
+    value.trim()
+
+  if (
+    !trimmed.startsWith('{') &&
+    !trimmed.startsWith('[')
+  ) {
+    return value
+  }
+
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return value
+  }
+}
+
+/*
+ * =========================================
+ * GET MEASUREMENT SOURCE
+ * =========================================
+ */
+
+const getMeasurementSources = (
+  item: CuttingItem,
+): unknown[] => {
+  return [
+    item,
+    parsePossibleObject(
+      item.measurement,
+    ),
+    parsePossibleObject(
+      item.measurements,
+    ),
+    parsePossibleObject(
+      item.dimensions,
+    ),
+    parsePossibleObject(
+      item.size,
+    ),
+  ]
+}
+
+/*
+ * =========================================
+ * GET WIDTH
+ * =========================================
+ */
+
+const getItemWidth = (
+  item: CuttingItem,
+): string => {
+  const sources =
+    getMeasurementSources(item)
+
+  const keys = [
+    'width',
+    'Width',
+    'WIDTH',
+    'w',
+    'W',
+    'measurementWidth',
+    'widthValue',
+  ]
+
+  for (const source of sources) {
+    const value =
+      findNestedValue(
+        source,
+        keys,
+      )
+
+    if (value) {
+      return value
+    }
+  }
+
+  return '-'
+}
+
+/*
+ * =========================================
+ * GET HEIGHT
+ * =========================================
+ */
+
+const getItemHeight = (
+  item: CuttingItem,
+): string => {
+  const sources =
+    getMeasurementSources(item)
+
+  const keys = [
+    'height',
+    'Height',
+    'HEIGHT',
+    'h',
+    'H',
+    'measurementHeight',
+    'heightValue',
+  ]
+
+  for (const source of sources) {
+    const value =
+      findNestedValue(
+        source,
+        keys,
+      )
+
+    if (value) {
+      return value
+    }
+  }
+
+  return '-'
+}
+
+/*
+ * =========================================
+ * GET LENGTH
+ * =========================================
+ */
+
+const getItemLength = (
+  item: CuttingItem,
+): string => {
+  const sources =
+    getMeasurementSources(item)
+
+  const keys = [
+    'length',
+    'Length',
+    'LENGTH',
+    'l',
+    'L',
+    'measurementLength',
+  ]
+
+  for (const source of sources) {
+    const value =
+      findNestedValue(
+        source,
+        keys,
+      )
+
+    if (value) {
+      return value
+    }
+  }
+
+  return ''
+}
+
+/*
+ * =========================================
+ * GET BREADTH
+ * =========================================
+ */
+
+const getItemBreadth = (
+  item: CuttingItem,
+): string => {
+  const sources =
+    getMeasurementSources(item)
+
+  const keys = [
+    'breadth',
+    'Breadth',
+    'BREADTH',
+    'b',
+    'B',
+    'measurementBreadth',
+  ]
+
+  for (const source of sources) {
+    const value =
+      findNestedValue(
+        source,
+        keys,
+      )
+
+    if (value) {
+      return value
+    }
+  }
+
+  return ''
+}
+
+/*
+ * =========================================
+ * GET QUANTITY
+ * =========================================
+ */
+
+const getItemQuantity = (
+  item: CuttingItem,
+): string => {
+  const sources =
+    getMeasurementSources(item)
+
+  const keys = [
+    'qty',
+    'Qty',
+    'quantity',
+    'Quantity',
+    'QTY',
+  ]
+
+  for (const source of sources) {
+    const value =
+      findNestedValue(
+        source,
+        keys,
+      )
+
+    if (value) {
+      return value
+    }
+  }
+
+  return '-'
+}
+
+/*
+ * =========================================
+ * GET REMARKS
+ * =========================================
+ */
+
+const getItemRemarks = (
+  item: CuttingItem,
+): string => {
+  const sources =
+    getMeasurementSources(item)
+
+  const keys = [
+    'remarks',
+    'remark',
+    'Remarks',
+    'Remark',
+    'notes',
+    'note',
+  ]
+
+  for (const source of sources) {
+    const value =
+      findNestedValue(
+        source,
+        keys,
+      )
+
+    if (value) {
+      return value
+    }
+  }
+
+  return '-'
+}
+
+/*
+ * =========================================
+ * GET UNIT
+ * =========================================
+ */
+
+const getItemUnit = (
+  item: CuttingItem,
+): string => {
+  const sources =
+    getMeasurementSources(item)
+
+  const keys = [
+    'unit',
+    'Unit',
+    'UNIT',
+    'measurementUnit',
+  ]
+
+  for (const source of sources) {
+    const value =
+      findNestedValue(
+        source,
+        keys,
+      )
+
+    if (value) {
+      return value
+    }
+  }
+
+  return ''
+}
+
+/*
+ * =========================================
+ * MEASUREMENT DISPLAY
+ * =========================================
+ */
+
+const getMeasurementText = (
+  item: CuttingItem,
+): string => {
+  const width =
+    getItemWidth(item)
+
+  const height =
+    getItemHeight(item)
+
+  const length =
+    getItemLength(item)
+
+  const breadth =
+    getItemBreadth(item)
+
+  const unit =
+    getItemUnit(item)
+
+  const parts: string[] = []
+
+  if (
+    width &&
+    width !== '-'
+  ) {
+    parts.push(
+      `W: ${width}`,
+    )
+  }
+
+  if (
+    height &&
+    height !== '-'
+  ) {
+    parts.push(
+      `H: ${height}`,
+    )
+  }
+
+  if (length) {
+    parts.push(
+      `L: ${length}`,
+    )
+  }
+
+  if (breadth) {
+    parts.push(
+      `B: ${breadth}`,
+    )
+  }
+
+  if (unit) {
+    parts.push(unit)
+  }
+
+  if (
+    parts.length === 0
+  ) {
+    return '-'
+  }
+
+  return parts.join(' × ')
+}
+
+/*
+ * =========================================
+ * COMPONENT
+ * =========================================
+ */
+
 function Cutting({
   user,
 }: CuttingProps) {
@@ -133,11 +674,12 @@ function Cutting({
    * =========================================
    */
 
-  const currentUser = user ?? {
-    name: '',
-    username: '',
-    roles: [],
-  }
+  const currentUser =
+    user ?? {
+      name: '',
+      username: '',
+      roles: [],
+    }
 
   /*
    * =========================================
@@ -158,7 +700,9 @@ function Cutting({
     useState(false)
 
   const [activeFilter, setActiveFilter] =
-    useState<CuttingFilter>('pending')
+    useState<CuttingFilter>(
+      'pending',
+    )
 
   const [expandedOrder, setExpandedOrder] =
     useState<string | null>(null)
@@ -174,18 +718,25 @@ function Cutting({
 
   /*
    * =========================================
-   * FETCH CUTTING JOBS
+   * FETCH JOB ORDERS
    * =========================================
    */
 
   useEffect(() => {
     const ordersRef =
-      collection(db, 'job_orders')
+      collection(
+        db,
+        'job_orders',
+      )
 
-    const ordersQuery = query(
-      ordersRef,
-      orderBy('createdAt', 'desc'),
-    )
+    const ordersQuery =
+      query(
+        ordersRef,
+        orderBy(
+          'createdAt',
+          'desc',
+        ),
+      )
 
     const unsubscribe =
       onSnapshot(
@@ -203,6 +754,16 @@ function Cutting({
                   )
                     ? data.items
                     : []
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * Do NOT strip measurement
+                 * information here.
+                 *
+                 * We keep the entire item
+                 * object using ...item.
+                 */
 
                 const items: CuttingItem[] =
                   rawItems.map(
@@ -226,7 +787,8 @@ function Cutting({
                     '',
 
                   date:
-                    data.date || '',
+                    data.date ??
+                    '',
 
                   expectedDeliveryDate:
                     data.expectedDeliveryDate ??
@@ -240,7 +802,8 @@ function Cutting({
 
                   customer: {
                     name:
-                      data.customer?.name ??
+                      data.customer
+                        ?.name ??
                       '',
 
                     companyName:
@@ -259,7 +822,8 @@ function Cutting({
                       '',
 
                     place:
-                      data.customer?.place ??
+                      data.customer
+                        ?.place ??
                       '',
                   },
 
@@ -336,7 +900,8 @@ function Cutting({
                       'Pending',
 
                     print:
-                      data.statuses?.print ??
+                      data.statuses
+                        ?.print ??
                       'Pending',
 
                     production:
@@ -356,10 +921,8 @@ function Cutting({
             )
 
           /*
-           * Only show actual cutting jobs.
-           *
-           * Finished cutting jobs are removed
-           * automatically.
+           * Only cutting jobs which are
+           * not finished.
            */
 
           const activeCuttingOrders =
@@ -367,7 +930,8 @@ function Cutting({
               (order) =>
                 order.officeInfo
                   .cuttingJob === true &&
-                order.statuses?.cutting !==
+                order.statuses
+                  ?.cutting !==
                   'Finished',
             )
 
@@ -391,22 +955,19 @@ function Cutting({
         },
       )
 
-    return () => unsubscribe()
+    return () =>
+      unsubscribe()
   }, [])
 
   /*
    * =========================================
-   * CHECK ASSIGNMENT
+   * ASSIGNMENT
    * =========================================
    */
 
   const isAssignedToCurrentUser = (
     order: JobOrder,
   ) => {
-    /*
-     * Prefer username because it is unique.
-     */
-
     if (
       order.officeInfo
         .cuttingUsername
@@ -418,10 +979,6 @@ function Cutting({
       )
     }
 
-    /*
-     * Backward compatibility using name.
-     */
-
     return (
       !!order.officeInfo.cutting &&
       order.officeInfo.cutting ===
@@ -431,7 +988,7 @@ function Cutting({
 
   /*
    * =========================================
-   * ITEM STATE
+   * ITEM STATUS
    * =========================================
    */
 
@@ -442,7 +999,8 @@ function Cutting({
       (item) =>
         item.cuttingStatus ===
           'finished' ||
-        item.cuttingStatus === 'na',
+        item.cuttingStatus ===
+          'na',
     )
   }
 
@@ -459,33 +1017,35 @@ function Cutting({
       (item) =>
         item.cuttingStatus ===
           'finished' ||
-        item.cuttingStatus === 'na',
+        item.cuttingStatus ===
+          'na',
     )
   }
 
   /*
    * =========================================
-   * AVAILABLE WORK
+   * VISIBLE ORDERS
    * =========================================
    */
 
-  const visibleOrders = useMemo(() => {
-    if (showAllWork) {
-      return jobOrders
-    }
+  const visibleOrders =
+    useMemo(() => {
+      if (showAllWork) {
+        return jobOrders
+      }
 
-    return jobOrders.filter(
-      (order) =>
-        isAssignedToCurrentUser(
-          order,
-        ),
-    )
-  }, [
-    jobOrders,
-    showAllWork,
-    currentUser.username,
-    currentUser.name,
-  ])
+      return jobOrders.filter(
+        (order) =>
+          isAssignedToCurrentUser(
+            order,
+          ),
+      )
+    }, [
+      jobOrders,
+      showAllWork,
+      currentUser.username,
+      currentUser.name,
+    ])
 
   /*
    * =========================================
@@ -493,37 +1053,46 @@ function Cutting({
    * =========================================
    */
 
-  const pendingCount = useMemo(() => {
-    return visibleOrders.filter(
-      (order) =>
-        !areAllItemsFinished(order),
-    ).length
-  }, [visibleOrders])
+  const pendingCount =
+    useMemo(() => {
+      return visibleOrders.filter(
+        (order) =>
+          !areAllItemsFinished(
+            order,
+          ),
+      ).length
+    }, [visibleOrders])
 
-  const todayCount = useMemo(() => {
-    const today =
-      getTodayString()
+  const todayCount =
+    useMemo(() => {
+      const today =
+        getTodayString()
 
-    return visibleOrders.filter(
-      (order) =>
-        order.expectedDeliveryDate ===
-          today &&
-        !areAllItemsFinished(order),
-    ).length
-  }, [visibleOrders])
+      return visibleOrders.filter(
+        (order) =>
+          order.expectedDeliveryDate ===
+            today &&
+          !areAllItemsFinished(
+            order,
+          ),
+      ).length
+    }, [visibleOrders])
 
-  const lateCount = useMemo(() => {
-    const today =
-      getTodayString()
+  const lateCount =
+    useMemo(() => {
+      const today =
+        getTodayString()
 
-    return visibleOrders.filter(
-      (order) =>
-        !!order.expectedDeliveryDate &&
-        order.expectedDeliveryDate <
-          today &&
-        !areAllItemsFinished(order),
-    ).length
-  }, [visibleOrders])
+      return visibleOrders.filter(
+        (order) =>
+          !!order.expectedDeliveryDate &&
+          order.expectedDeliveryDate <
+            today &&
+          !areAllItemsFinished(
+            order,
+          ),
+      ).length
+    }, [visibleOrders])
 
   /*
    * =========================================
@@ -531,52 +1100,53 @@ function Cutting({
    * =========================================
    */
 
-  const filteredOrders = useMemo(() => {
-    const today =
-      getTodayString()
+  const filteredOrders =
+    useMemo(() => {
+      const today =
+        getTodayString()
 
-    switch (activeFilter) {
-      case 'pending':
-        return visibleOrders.filter(
-          (order) =>
-            !areAllItemsFinished(
-              order,
-            ),
-        )
+      switch (activeFilter) {
+        case 'pending':
+          return visibleOrders.filter(
+            (order) =>
+              !areAllItemsFinished(
+                order,
+              ),
+          )
 
-      case 'today':
-        return visibleOrders.filter(
-          (order) =>
-            order.expectedDeliveryDate ===
-              today &&
-            !areAllItemsFinished(
-              order,
-            ),
-        )
+        case 'today':
+          return visibleOrders.filter(
+            (order) =>
+              order.expectedDeliveryDate ===
+                today &&
+              !areAllItemsFinished(
+                order,
+              ),
+          )
 
-      case 'late':
-        return visibleOrders.filter(
-          (order) =>
-            !!order.expectedDeliveryDate &&
-            order.expectedDeliveryDate <
-              today &&
-            !areAllItemsFinished(
-              order,
-            ),
-        )
+        case 'late':
+          return visibleOrders.filter(
+            (order) =>
+              !!order.expectedDeliveryDate &&
+              order.expectedDeliveryDate <
+                today &&
+              !areAllItemsFinished(
+                order,
+              ),
+          )
 
-      case 'all':
-      default:
-        return visibleOrders
-    }
-  }, [
-    visibleOrders,
-    activeFilter,
-  ])
+        case 'all':
+        default:
+          return visibleOrders
+      }
+    }, [
+      visibleOrders,
+      activeFilter,
+    ])
 
   /*
    * =========================================
-   * FILTER CLICK
+   * FILTER
    * =========================================
    */
 
@@ -584,7 +1154,6 @@ function Cutting({
     filter: CuttingFilter,
   ) => {
     setActiveFilter(filter)
-
     setExpandedOrder(null)
   }
 
@@ -603,11 +1172,6 @@ function Cutting({
       return
     }
 
-    /*
-     * If cutting work has already started,
-     * another worker cannot take it.
-     */
-
     if (
       hasStartedCuttingWork(order)
     ) {
@@ -619,7 +1183,6 @@ function Cutting({
     }
 
     setAcceptingOrder(order.id)
-
     setError('')
 
     try {
@@ -660,94 +1223,99 @@ function Cutting({
    * =========================================
    */
 
-  const handleItemStatus = async (
-    order: JobOrder,
-    itemIndex: number,
-    status:
-      | 'finished'
-      | 'na',
-  ) => {
-    if (
-      savingItem ===
-      `${order.id}-${itemIndex}`
-    ) {
-      return
+  const handleItemStatus =
+    async (
+      order: JobOrder,
+      itemIndex: number,
+      status:
+        | 'finished'
+        | 'na',
+    ) => {
+      const itemKey =
+        `${order.id}-${itemIndex}`
+
+      if (
+        savingItem === itemKey
+      ) {
+        return
+      }
+
+      if (
+        !isAssignedToCurrentUser(
+          order,
+        )
+      ) {
+        alert(
+          'Accept this work before updating the cutting status.',
+        )
+
+        return
+      }
+
+      if (
+        order.statuses?.cutting ===
+        'Finished'
+      ) {
+        return
+      }
+
+      /*
+       * Preserve ALL measurement data
+       * because we copy the complete item.
+       */
+
+      const updatedItems =
+        order.items.map(
+          (
+            item,
+            index,
+          ) =>
+            index === itemIndex
+              ? {
+                  ...item,
+                  cuttingStatus:
+                    status,
+                }
+              : item,
+        )
+
+      setSavingItem(itemKey)
+      setError('')
+
+      try {
+        await updateDoc(
+          doc(
+            db,
+            'job_orders',
+            order.id,
+          ),
+          {
+            items:
+              updatedItems,
+
+            'statuses.cutting':
+              'In Progress',
+
+            'officeInfo.cutting':
+              currentUser.name,
+
+            'officeInfo.cuttingUsername':
+              currentUser.username,
+          },
+        )
+      } catch (firebaseError) {
+        console.error(
+          'Error updating cutting item:',
+          firebaseError,
+        )
+
+        setError(
+          'Unable to update item status.',
+        )
+      } finally {
+        setSavingItem(null)
+      }
     }
-
-    /*
-     * Only assigned cutting worker
-     * can update items.
-     */
-
-    if (
-      !isAssignedToCurrentUser(
-        order,
-      )
-    ) {
-      alert(
-        'Accept this work before updating the cutting status.',
-      )
-
-      return
-    }
-
-    if (
-      order.statuses?.cutting ===
-      'Finished'
-    ) {
-      return
-    }
-
-    const updatedItems =
-      order.items.map(
-        (item, index) =>
-          index === itemIndex
-            ? {
-                ...item,
-                cuttingStatus: status,
-              }
-            : item,
-      )
-
-    setSavingItem(
-      `${order.id}-${itemIndex}`,
-    )
-
-    setError('')
-
-    try {
-      await updateDoc(
-        doc(
-          db,
-          'job_orders',
-          order.id,
-        ),
-        {
-          items: updatedItems,
-
-          'statuses.cutting':
-            'In Progress',
-
-          'officeInfo.cutting':
-            currentUser.name,
-
-          'officeInfo.cuttingUsername':
-            currentUser.username,
-        },
-      )
-    } catch (firebaseError) {
-      console.error(
-        'Error updating cutting item:',
-        firebaseError,
-      )
-
-      setError(
-        'Unable to update item status.',
-      )
-    } finally {
-      setSavingItem(null)
-    }
-  }
 
   /*
    * =========================================
@@ -788,7 +1356,6 @@ function Cutting({
       }
 
       setFinishingOrder(order.id)
-
       setError('')
 
       try {
@@ -799,7 +1366,8 @@ function Cutting({
             order.id,
           ),
           {
-            items: order.items,
+            items:
+              order.items,
 
             'statuses.cutting':
               'Finished',
@@ -849,7 +1417,7 @@ function Cutting({
 
   /*
    * =========================================
-   * CUTTING WORKER LABEL
+   * CUTTING WORKER
    * =========================================
    */
 
@@ -872,21 +1440,17 @@ function Cutting({
 
   /*
    * =========================================
-   * PAGE
+   * RENDER
    * =========================================
    */
 
   return (
     <div className="department-page">
-
       <div className="department-container">
 
-        {/* =====================================
-            HEADER
-        ====================================== */}
+        {/* HEADER */}
 
         <div className="department-header">
-
           <div>
             <h1>
               Cutting Dashboard
@@ -898,8 +1462,6 @@ function Cutting({
               → Production
             </p>
           </div>
-
-          {/* MY WORK / ALL WORK */}
 
           <button
             type="button"
@@ -920,13 +1482,9 @@ function Cutting({
               ? 'My Work'
               : 'Show All Work'}
           </button>
-
         </div>
 
-
-        {/* =====================================
-            ERROR
-        ====================================== */}
+        {/* ERROR */}
 
         {error && (
           <div className="form-message">
@@ -934,14 +1492,9 @@ function Cutting({
           </div>
         )}
 
-
-        {/* =====================================
-            DASHBOARD FILTERS
-        ====================================== */}
+        {/* FILTERS */}
 
         <div className="statistics-dashboard">
-
-          {/* ALL */}
 
           <button
             type="button"
@@ -968,9 +1521,6 @@ function Cutting({
               All active cutting orders
             </div>
           </button>
-
-
-          {/* PENDING */}
 
           <button
             type="button"
@@ -999,9 +1549,6 @@ function Cutting({
             </div>
           </button>
 
-
-          {/* TODAY */}
-
           <button
             type="button"
             className={
@@ -1029,9 +1576,6 @@ function Cutting({
             </div>
           </button>
 
-
-          {/* LATE */}
-
           <button
             type="button"
             className={
@@ -1057,16 +1601,11 @@ function Cutting({
               Past expected date
             </div>
           </button>
-
         </div>
 
-
-        {/* =====================================
-            CURRENT MODE
-        ====================================== */}
+        {/* CURRENT MODE */}
 
         <div className="statistics-filter-bar">
-
           <div>
             <strong>
               Viewing:
@@ -1097,18 +1636,13 @@ function Cutting({
                     : ' All Work'}
             </span>
           </div>
-
         </div>
 
-
-        {/* =====================================
-            ORDERS
-        ====================================== */}
+        {/* ORDERS */}
 
         <div className="department-section">
 
           <div className="section-heading-row">
-
             <div>
               <h2>
                 Cutting Work
@@ -1124,9 +1658,7 @@ function Cutting({
                 found
               </p>
             </div>
-
           </div>
-
 
           {loading && (
             <div className="empty-items">
@@ -1134,12 +1666,10 @@ function Cutting({
             </div>
           )}
 
-
           {!loading &&
             filteredOrders.length ===
               0 && (
               <div className="empty-items">
-
                 <h3>
                   No Cutting Work Found
                 </h3>
@@ -1149,10 +1679,8 @@ function Cutting({
                   cutting orders matching
                   the current selection.
                 </p>
-
               </div>
             )}
-
 
           {!loading &&
             filteredOrders.length >
@@ -1186,14 +1714,11 @@ function Cutting({
                         className="statistics-order-card"
                       >
 
-                        {/* =================================
-                            ORDER HEADER
-                        ================================== */}
+                        {/* ORDER HEADER */}
 
                         <div className="statistics-order-header">
 
                           <div>
-
                             <div className="job-order-id">
                               Order ID:{' '}
                               {getOrderId(
@@ -1214,12 +1739,9 @@ function Cutting({
                                 .companyName ||
                                 'No company name'}
                             </p>
-
                           </div>
 
-
                           <div className="statistics-order-meta">
-
                             <span>
                               Branch:{' '}
                               {order.branch ||
@@ -1239,15 +1761,10 @@ function Cutting({
                                 order,
                               )}
                             </span>
-
                           </div>
-
                         </div>
 
-
-                        {/* =================================
-                            SUMMARY
-                        ================================== */}
+                        {/* SUMMARY */}
 
                         <div className="statistics-order-summary">
 
@@ -1264,7 +1781,6 @@ function Cutting({
                             </span>
                           </div>
 
-
                           <div>
                             <strong>
                               Cutting Status
@@ -1278,7 +1794,6 @@ function Cutting({
                             </span>
                           </div>
 
-
                           <div>
                             <strong>
                               Items
@@ -1288,17 +1803,11 @@ function Cutting({
                               {order.items.length}
                             </span>
                           </div>
-
                         </div>
 
-
-                        {/* =================================
-                            ACTIONS
-                        ================================== */}
+                        {/* ACTIONS */}
 
                         <div className="statistics-order-actions">
-
-                          {/* ACCEPT */}
 
                           {showAllWork &&
                             !assignedToMe &&
@@ -1323,9 +1832,6 @@ function Cutting({
                               </button>
                             )}
 
-
-                          {/* ALREADY STARTED */}
-
                           {showAllWork &&
                             !assignedToMe &&
                             workStarted && (
@@ -1349,9 +1855,6 @@ function Cutting({
                               </span>
                             )}
 
-
-                          {/* VIEW */}
-
                           <button
                             type="button"
                             className="view-button"
@@ -1367,9 +1870,6 @@ function Cutting({
                               ? 'Hide Details'
                               : 'View Details'}
                           </button>
-
-
-                          {/* FINISH */}
 
                           {assignedToMe && (
                             <button
@@ -1389,11 +1889,6 @@ function Cutting({
                                   order,
                                 )
                               }
-                              title={
-                                allItemsDone
-                                  ? 'Finish cutting'
-                                  : 'Complete all items first'
-                              }
                             >
                               {finishingOrder ===
                               order.id
@@ -1403,13 +1898,9 @@ function Cutting({
                                   : 'Complete All Items'}
                             </button>
                           )}
-
                         </div>
 
-
-                        {/* =================================
-                            EXPANDED DETAILS
-                        ================================== */}
+                        {/* DETAILS */}
 
                         {isExpanded && (
                           <div className="statistics-order-details">
@@ -1426,13 +1917,10 @@ function Cutting({
                                 </strong>
 
                                 <span>
-                                  {order
-                                    .customer
-                                    .name ||
+                                  {order.customer.name ||
                                     '-'}
                                 </span>
                               </div>
-
 
                               <div>
                                 <strong>
@@ -1440,13 +1928,10 @@ function Cutting({
                                 </strong>
 
                                 <span>
-                                  {order
-                                    .customer
-                                    .companyName ||
+                                  {order.customer.companyName ||
                                     '-'}
                                 </span>
                               </div>
-
 
                               <div>
                                 <strong>
@@ -1454,13 +1939,10 @@ function Cutting({
                                 </strong>
 
                                 <span>
-                                  {order
-                                    .customer
-                                    .phoneNumber ||
+                                  {order.customer.phoneNumber ||
                                     '-'}
                                 </span>
                               </div>
-
 
                               <div>
                                 <strong>
@@ -1468,13 +1950,10 @@ function Cutting({
                                 </strong>
 
                                 <span>
-                                  {order
-                                    .customer
-                                    .whatsappNumber ||
+                                  {order.customer.whatsappNumber ||
                                     '-'}
                                 </span>
                               </div>
-
 
                               <div>
                                 <strong>
@@ -1482,13 +1961,10 @@ function Cutting({
                                 </strong>
 
                                 <span>
-                                  {order
-                                    .customer
-                                    .place ||
+                                  {order.customer.place ||
                                     '-'}
                                 </span>
                               </div>
-
 
                               <div>
                                 <strong>
@@ -1501,13 +1977,9 @@ function Cutting({
                                   )}
                                 </span>
                               </div>
-
                             </div>
 
-
-                            {/* =================================
-                                ITEM LIST
-                            ================================== */}
+                            {/* ITEMS */}
 
                             <h4>
                               Items for Cutting
@@ -1519,13 +1991,16 @@ function Cutting({
 
                                 <thead>
                                   <tr>
-
                                     <th>
                                       #
                                     </th>
 
                                     <th>
                                       Item
+                                    </th>
+
+                                    <th>
+                                      Measurement
                                     </th>
 
                                     <th>
@@ -1547,7 +2022,6 @@ function Cutting({
                                     <th>
                                       Cutting
                                     </th>
-
                                   </tr>
                                 </thead>
 
@@ -1558,7 +2032,6 @@ function Cutting({
                                       item,
                                       itemIndex,
                                     ) => {
-
                                       const itemKey =
                                         `${order.id}-${itemIndex}`
 
@@ -1569,6 +2042,31 @@ function Cutting({
                                       const itemNA =
                                         item.cuttingStatus ===
                                         'na'
+
+                                      const width =
+                                        getItemWidth(
+                                          item,
+                                        )
+
+                                      const height =
+                                        getItemHeight(
+                                          item,
+                                        )
+
+                                      const quantity =
+                                        getItemQuantity(
+                                          item,
+                                        )
+
+                                      const remarks =
+                                        getItemRemarks(
+                                          item,
+                                        )
+
+                                      const measurement =
+                                        getMeasurementText(
+                                          item,
+                                        )
 
                                       return (
                                         <tr
@@ -1590,25 +2088,39 @@ function Cutting({
                                             </strong>
                                           </td>
 
-                                          <td>
-                                            {item.width ||
-                                              '-'}
-                                          </td>
+                                          {/* FULL MEASUREMENT */}
 
                                           <td>
-                                            {item.height ||
-                                              '-'}
+                                            <strong>
+                                              {measurement}
+                                            </strong>
                                           </td>
 
-                                          <td>
-                                            {item.qty ||
-                                              '-'}
-                                          </td>
+                                          {/* WIDTH */}
 
                                           <td>
-                                            {item.remarks ||
-                                              '-'}
+                                            {width}
                                           </td>
+
+                                          {/* HEIGHT */}
+
+                                          <td>
+                                            {height}
+                                          </td>
+
+                                          {/* QUANTITY */}
+
+                                          <td>
+                                            {quantity}
+                                          </td>
+
+                                          {/* REMARKS */}
+
+                                          <td>
+                                            {remarks}
+                                          </td>
+
+                                          {/* CUTTING */}
 
                                           <td>
 
@@ -1622,8 +2134,6 @@ function Cutting({
                                                   'wrap',
                                               }}
                                             >
-
-                                              {/* NA */}
 
                                               <button
                                                 type="button"
@@ -1656,15 +2166,10 @@ function Cutting({
                                                     '#475569',
                                                   fontWeight:
                                                     600,
-                                                  cursor:
-                                                    'pointer',
                                                 }}
                                               >
                                                 NA
                                               </button>
-
-
-                                              {/* FINISHED */}
 
                                               <button
                                                 type="button"
@@ -1697,17 +2202,12 @@ function Cutting({
                                                     '#166534',
                                                   fontWeight:
                                                     700,
-                                                  cursor:
-                                                    'pointer',
                                                 }}
                                               >
                                                 ✓
                                               </button>
 
                                             </div>
-
-
-                                            {/* ITEM STATUS */}
 
                                             <div
                                               style={{
@@ -1733,22 +2233,16 @@ function Cutting({
                                             </div>
 
                                           </td>
-
                                         </tr>
                                       )
                                     },
                                   )}
 
                                 </tbody>
-
                               </table>
-
                             </div>
 
-
-                            {/* =================================
-                                COMPLETION INFORMATION
-                            ================================== */}
+                            {/* MEASUREMENT DEBUG / DETAILS */}
 
                             <div
                               style={{
@@ -1759,14 +2253,11 @@ function Cutting({
                                 borderRadius:
                                   '10px',
                                 background:
-                                  allItemsDone
-                                    ? '#dcfce7'
-                                    : '#f8fafc',
+                                  '#f8fafc',
                                 border:
                                   '1px solid #e2e8f0',
                               }}
                             >
-
                               <strong>
                                 Cutting Progress
                               </strong>
@@ -1783,26 +2274,21 @@ function Cutting({
                                   ? 'All items are completed. Cutting can now be finished.'
                                   : 'Every item must be marked ✓ Finished or NA before the order can be finished.'}
                               </p>
-
                             </div>
 
                           </div>
                         )}
-
                       </div>
                     )
                   },
                 )}
-
               </div>
             )}
-
         </div>
-
       </div>
-
     </div>
   )
 }
 
 export default Cutting
+

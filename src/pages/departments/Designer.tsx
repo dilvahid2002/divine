@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react'
 import {
   collection,
@@ -25,6 +26,15 @@ type DesignerFilter =
   | 'today'
   | 'late'
 
+type JobStatus =
+  | 'Pending'
+  | 'In Progress'
+  | 'Finished'
+
+type JobSource =
+  | 'job_orders'
+  | 'measurements'
+
 interface DesignItem {
   slNo: number
   name: string
@@ -37,66 +47,80 @@ interface DesignItem {
   designStatus?: 'pending' | 'finished' | 'na'
 }
 
-interface JobOrder {
+interface Customer {
+  name: string
+  companyName: string
+  phoneNumber: string
+  whatsappNumber: string
+  place: string
+}
+
+interface DesignerOfficeInfo {
+  designJob: boolean
+  printJob: boolean
+  productionJob: boolean
+  cuttingJob?: boolean
+
+  designer?: string | null
+  designerUsername?: string | null
+
+  printBranch?: string | null
+}
+
+interface DepartmentStatuses {
+  design: JobStatus
+  print: JobStatus
+  production: JobStatus
+  cutting?: JobStatus
+}
+
+interface CustomerAdviser {
+  name: string
+  username: string
+}
+
+interface UnifiedDesignJob {
   id: string
 
-  orderId?: number | string
+  source: JobSource
+
+  orderId: number | string
 
   date: string
 
-  expectedDeliveryDate?: string
+  expectedDeliveryDate: string
 
-  branch?: string
+  branch: string
 
-  customer: {
-    name: string
-    companyName: string
-    phoneNumber: string
-    whatsappNumber: string
-    place: string
-  }
+  customer: Customer
 
   items: DesignItem[]
 
-  officeInfo: {
-    designJob: boolean
-    printJob: boolean
-    productionJob: boolean
+  officeInfo: DesignerOfficeInfo
 
-    designer?: string | null
-    designerUsername?: string | null
+  customerAdviser: CustomerAdviser
 
-    printBranch?: string | null
-  }
-
-  customerAdviser: {
-    name: string
-    username: string
-  }
-
-  statuses?: {
-    design:
-      | 'Pending'
-      | 'In Progress'
-      | 'Finished'
-
-    print:
-      | 'Pending'
-      | 'In Progress'
-      | 'Finished'
-
-    production:
-      | 'Pending'
-      | 'In Progress'
-      | 'Finished'
-  }
+  statuses: DepartmentStatuses
 
   designCharge?: number
 
   delivered?: boolean
 
   createdAt?: Timestamp
+
+  quotationStatus?: 'Pending' | 'Confirmed'
+
+  quotationGeneratedBy?: {
+    name: string
+    username: string
+  }
 }
+
+/*
+ * =========================================
+ * HELPERS
+ * =========================================
+ */
 
 const getTodayString = () => {
   const today = new Date()
@@ -114,15 +138,516 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`
 }
 
+const getString = (
+  value: unknown,
+): string => {
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number'
+  ) {
+    return String(value)
+  }
+
+  return ''
+}
+
+const getBoolean = (
+  value: unknown,
+): boolean => {
+  return value === true
+}
+
+const getJobStatus = (
+  value: unknown,
+): JobStatus => {
+  if (
+    value === 'In Progress' ||
+    value === 'Finished'
+  ) {
+    return value
+  }
+
+  return 'Pending'
+}
+
+/*
+ * =========================================
+ * NORMALIZE JOB ORDER
+ * =========================================
+ */
+
+const normalizeJobOrder = (
+  documentId: string,
+  data: any,
+): UnifiedDesignJob => {
+  const rawItems = Array.isArray(
+    data.items,
+  )
+    ? data.items
+    : []
+
+  const items: DesignItem[] =
+    rawItems.map(
+      (
+        item: any,
+        index: number,
+      ) => ({
+        slNo:
+          typeof item?.slNo ===
+          'number'
+            ? item.slNo
+            : index + 1,
+
+        name:
+          getString(
+            item?.name,
+          ),
+
+        width:
+          getString(
+            item?.width,
+          ),
+
+        height:
+          getString(
+            item?.height,
+          ),
+
+        qty:
+          getString(
+            item?.qty,
+          ),
+
+        price:
+          getString(
+            item?.price,
+          ),
+
+        remarks:
+          getString(
+            item?.remarks,
+          ),
+
+        designStatus:
+          item?.designStatus ??
+          'pending',
+      }),
+    )
+
+  return {
+    id: documentId,
+
+    source: 'job_orders',
+
+    orderId:
+      data.orderId ??
+      data.orderNumber ??
+      documentId,
+
+    date:
+      getString(
+        data.date,
+      ),
+
+    expectedDeliveryDate:
+      getString(
+        data.expectedDeliveryDate ??
+          data.deliveryDate,
+      ),
+
+    branch:
+      getString(
+        data.branch ??
+          data.selectedBranch,
+      ),
+
+    customer: {
+      name:
+        getString(
+          data.customer?.name,
+        ),
+
+      companyName:
+        getString(
+          data.customer
+            ?.companyName,
+        ),
+
+      phoneNumber:
+        getString(
+          data.customer
+            ?.phoneNumber,
+        ),
+
+      whatsappNumber:
+        getString(
+          data.customer
+            ?.whatsappNumber,
+        ),
+
+      place:
+        getString(
+          data.customer?.place,
+        ),
+    },
+
+    items,
+
+    officeInfo: {
+      designJob:
+        getBoolean(
+          data.officeInfo
+            ?.designJob,
+        ),
+
+      printJob:
+        getBoolean(
+          data.officeInfo
+            ?.printJob,
+        ),
+
+      productionJob:
+        getBoolean(
+          data.officeInfo
+            ?.productionJob,
+        ),
+
+      cuttingJob:
+        getBoolean(
+          data.officeInfo
+            ?.cuttingJob,
+        ),
+
+      designer:
+        data.officeInfo
+          ?.designer ??
+        null,
+
+      designerUsername:
+        data.officeInfo
+          ?.designerUsername ??
+        null,
+
+      printBranch:
+        data.officeInfo
+          ?.printBranch ??
+        null,
+    },
+
+    customerAdviser: {
+      name:
+        getString(
+          data.customerAdviser
+            ?.name,
+        ),
+
+      username:
+        getString(
+          data.customerAdviser
+            ?.username,
+        ),
+    },
+
+    statuses: {
+      design:
+        getJobStatus(
+          data.statuses
+            ?.design,
+        ),
+
+      print:
+        getJobStatus(
+          data.statuses?.print,
+        ),
+
+      production:
+        getJobStatus(
+          data.statuses
+            ?.production,
+        ),
+
+      cutting:
+        getJobStatus(
+          data.statuses
+            ?.cutting,
+        ),
+    },
+
+    designCharge:
+      typeof data.designCharge ===
+      'number'
+        ? data.designCharge
+        : undefined,
+
+    delivered:
+      data.delivered ??
+      false,
+
+    createdAt:
+      data.createdAt,
+  }
+}
+
+/*
+ * =========================================
+ * NORMALIZE MEASUREMENT
+ * =========================================
+ */
+
+const normalizeMeasurement = (
+  documentId: string,
+  data: any,
+): UnifiedDesignJob => {
+  const rawItems = Array.isArray(
+    data.items,
+  )
+    ? data.items
+    : []
+
+  /*
+   * Measurement items normally do not have
+   * the Job Order designStatus field.
+   *
+   * Therefore they are kept as pending here
+   * and the overall statuses.design controls
+   * completion for Measurement jobs.
+   */
+  const items: DesignItem[] =
+    rawItems.map(
+      (
+        item: any,
+        index: number,
+      ) => ({
+        slNo:
+          typeof item?.slNo ===
+          'number'
+            ? item.slNo
+            : index + 1,
+
+        name:
+          getString(
+            item?.name,
+          ),
+
+        width:
+          getString(
+            item?.width,
+          ),
+
+        height:
+          getString(
+            item?.height,
+          ),
+
+        qty:
+          getString(
+            item?.qty,
+          ),
+
+        price:
+          getString(
+            item?.price,
+          ),
+
+        remarks:
+          getString(
+            item?.remarks,
+          ),
+
+        designStatus:
+          item?.designStatus ??
+          'pending',
+      }),
+    )
+
+  const quotationStatus =
+    data.quotation?.status ===
+    'Confirmed'
+      ? 'Confirmed'
+      : 'Pending'
+
+  return {
+    id: documentId,
+
+    source: 'measurements',
+
+    /*
+     * Measurement ID is used as the
+     * visible order identifier.
+     */
+    orderId:
+      data.measurementId ??
+      data.orderId ??
+      documentId,
+
+    date:
+      getString(
+        data.date,
+      ),
+
+    expectedDeliveryDate:
+      getString(
+        data.expectedDeliveryDate,
+      ),
+
+    branch:
+      getString(
+        data.branch ??
+          data.selectedBranch,
+      ),
+
+    customer: {
+      name:
+        getString(
+          data.customer?.name,
+        ),
+
+      companyName:
+        getString(
+          data.customer
+            ?.companyName,
+        ),
+
+      phoneNumber:
+        getString(
+          data.customer
+            ?.phoneNumber,
+        ),
+
+      whatsappNumber:
+        getString(
+          data.customer
+            ?.whatsappNumber,
+        ),
+
+      place:
+        getString(
+          data.customer?.place,
+        ),
+    },
+
+    items,
+
+    officeInfo: {
+      designJob:
+        getBoolean(
+          data.officeInfo
+            ?.designJob,
+        ),
+
+      printJob:
+        getBoolean(
+          data.officeInfo
+            ?.printJob,
+        ),
+
+      productionJob:
+        getBoolean(
+          data.officeInfo
+            ?.productionJob,
+        ),
+
+      cuttingJob:
+        getBoolean(
+          data.officeInfo
+            ?.cuttingJob,
+        ),
+
+      /*
+       * These fields are written by this
+       * Designer page when work is accepted.
+       */
+      designer:
+        data.officeInfo
+          ?.designer ??
+        null,
+
+      designerUsername:
+        data.officeInfo
+          ?.designerUsername ??
+        null,
+
+      printBranch:
+        data.officeInfo
+          ?.printBranch ??
+        null,
+    },
+
+    customerAdviser: {
+      name:
+        getString(
+          data.customerAdviser
+            ?.name,
+        ),
+
+      username:
+        getString(
+          data.customerAdviser
+            ?.username,
+        ),
+    },
+
+    statuses: {
+      design:
+        getJobStatus(
+          data.statuses
+            ?.design,
+        ),
+
+      print:
+        getJobStatus(
+          data.statuses?.print,
+        ),
+
+      production:
+        getJobStatus(
+          data.statuses
+            ?.production,
+        ),
+
+      cutting:
+        getJobStatus(
+          data.statuses
+            ?.cutting,
+        ),
+    },
+
+    quotationStatus,
+
+    quotationGeneratedBy:
+      data.quotation
+        ?.generatedBy
+        ? {
+            name:
+              getString(
+                data.quotation
+                  .generatedBy
+                  ?.name,
+              ),
+
+            username:
+              getString(
+                data.quotation
+                  .generatedBy
+                  ?.username,
+              ),
+          }
+        : undefined,
+
+    createdAt:
+      data.createdAt,
+  }
+}
+
+/*
+ * =========================================
+ * COMPONENT
+ * =========================================
+ */
+
 function Designer({
   user,
 }: DesignerProps) {
-  /*
-   * =========================================
-   * USER
-   * =========================================
-   */
-
   const currentUser = user ?? {
     name: '',
     username: '',
@@ -135,8 +660,8 @@ function Designer({
    * =========================================
    */
 
-  const [jobOrders, setJobOrders] =
-    useState<JobOrder[]>([])
+  const [designJobs, setDesignJobs] =
+    useState<UnifiedDesignJob[]>([])
 
   const [loading, setLoading] =
     useState(true)
@@ -144,14 +669,13 @@ function Designer({
   const [error, setError] =
     useState('')
 
-  /*
-   * My Work / All Work is intentionally kept.
-   */
   const [showAllWork, setShowAllWork] =
     useState(false)
 
   const [activeFilter, setActiveFilter] =
-    useState<DesignerFilter>('pending')
+    useState<DesignerFilter>(
+      'pending',
+    )
 
   const [expandedOrder, setExpandedOrder] =
     useState<string | null>(null)
@@ -159,9 +683,6 @@ function Designer({
   const [savingItem, setSavingItem] =
     useState<string | null>(null)
 
-  /*
-   * Accept Work functionality is intentionally kept.
-   */
   const [acceptingOrder, setAcceptingOrder] =
     useState<string | null>(null)
 
@@ -176,231 +697,203 @@ function Designer({
 
   /*
    * =========================================
-   * FETCH DESIGN JOBS
+   * FETCH JOB ORDERS + MEASUREMENTS
    * =========================================
    */
 
   useEffect(() => {
-    const ordersRef =
-      collection(db, 'job_orders')
+    setLoading(true)
+    setError('')
 
-    const ordersQuery = query(
-      ordersRef,
-      orderBy('createdAt', 'desc'),
-    )
+    const jobOrdersRef =
+      collection(
+        db,
+        'job_orders',
+      )
 
-    const unsubscribe =
+    const measurementsRef =
+      collection(
+        db,
+        'measurements',
+      )
+
+    const jobOrdersQuery =
+      query(
+        jobOrdersRef,
+        orderBy(
+          'createdAt',
+          'desc',
+        ),
+      )
+
+    const measurementsQuery =
+      query(
+        measurementsRef,
+        orderBy(
+          'createdAt',
+          'desc',
+        ),
+      )
+
+    let jobOrders: UnifiedDesignJob[] =
+      []
+
+    let measurements: UnifiedDesignJob[] =
+      []
+
+    let jobOrdersLoaded = false
+    let measurementsLoaded = false
+
+    const updateCombinedJobs = () => {
+      if (
+        !jobOrdersLoaded ||
+        !measurementsLoaded
+      ) {
+        return
+      }
+
+      /*
+       * Job Orders:
+       * only actual design jobs.
+       */
+      const activeJobOrders =
+        jobOrders.filter(
+          (order) =>
+            order.officeInfo
+              .designJob === true &&
+            order.statuses
+              .design !==
+              'Finished',
+        )
+
+      /*
+       * Measurements:
+       *
+       * 1. designJob must be true
+       * 2. quotation must be Confirmed
+       * 3. design must not be Finished
+       */
+      const activeMeasurements =
+        measurements.filter(
+          (measurement) =>
+            measurement.officeInfo
+              .designJob === true &&
+            measurement.quotationStatus ===
+              'Confirmed' &&
+            measurement.statuses
+              .design !==
+              'Finished',
+        )
+
+      /*
+       * Combine both collections.
+       */
+      const combined = [
+        ...activeJobOrders,
+        ...activeMeasurements,
+      ]
+
+      /*
+       * Newest first.
+       */
+      combined.sort(
+        (a, b) => {
+          const aTime =
+            a.createdAt?.toMillis?.() ??
+            0
+
+          const bTime =
+            b.createdAt?.toMillis?.() ??
+            0
+
+          return bTime - aTime
+        },
+      )
+
+      setDesignJobs(
+        combined,
+      )
+
+      setLoading(false)
+    }
+
+    const unsubscribeJobOrders =
       onSnapshot(
-        ordersQuery,
+        jobOrdersQuery,
         (snapshot) => {
-          const orders: JobOrder[] =
+          jobOrders =
             snapshot.docs.map(
-              (document) => {
-                const data =
-                  document.data()
-
-                const rawItems =
-                  Array.isArray(
-                    data.items,
-                  )
-                    ? data.items
-                    : []
-
-                const items: DesignItem[] =
-                  rawItems.map(
-                    (
-                      item: DesignItem,
-                    ) => ({
-                      ...item,
-
-                      designStatus:
-                        item.designStatus ??
-                        'pending',
-                    }),
-                  )
-
-                return {
-                  id: document.id,
-
-                  orderId:
-                    data.orderId ??
-                    data.orderNumber ??
-                    '',
-
-                  date:
-                    data.date || '',
-
-                  expectedDeliveryDate:
-                    data.expectedDeliveryDate ??
-                    data.deliveryDate ??
-                    '',
-
-                  branch:
-                    data.branch ??
-                    data.selectedBranch ??
-                    '',
-
-                  customer: {
-                    name:
-                      data.customer?.name ??
-                      '',
-
-                    companyName:
-                      data.customer
-                        ?.companyName ??
-                      '',
-
-                    phoneNumber:
-                      data.customer
-                        ?.phoneNumber ??
-                      '',
-
-                    whatsappNumber:
-                      data.customer
-                        ?.whatsappNumber ??
-                      '',
-
-                    place:
-                      data.customer?.place ??
-                      '',
-                  },
-
-                  items,
-
-                  officeInfo: {
-                    designJob:
-                      data.officeInfo
-                        ?.designJob ??
-                      false,
-
-                    printJob:
-                      data.officeInfo
-                        ?.printJob ??
-                      false,
-
-                    productionJob:
-                      data.officeInfo
-                        ?.productionJob ??
-                      false,
-
-                    designer:
-                      data.officeInfo
-                        ?.designer ??
-                      null,
-
-                    designerUsername:
-                      data.officeInfo
-                        ?.designerUsername ??
-                      null,
-
-                    printBranch:
-                      data.officeInfo
-                        ?.printBranch ??
-                      null,
-                  },
-
-                  customerAdviser: {
-                    name:
-                      data.customerAdviser
-                        ?.name ??
-                      '',
-
-                    username:
-                      data.customerAdviser
-                        ?.username ??
-                      '',
-                  },
-
-                  statuses: {
-                    design:
-                      data.statuses
-                        ?.design ??
-                      'Pending',
-
-                    print:
-                      data.statuses?.print ??
-                      'Pending',
-
-                    production:
-                      data.statuses
-                        ?.production ??
-                      'Pending',
-                  },
-
-                  designCharge:
-                    data.designCharge ??
-                    undefined,
-
-                  delivered:
-                    data.delivered ??
-                    false,
-
-                  createdAt:
-                    data.createdAt,
-                }
-              },
+              (document) =>
+                normalizeJobOrder(
+                  document.id,
+                  document.data(),
+                ),
             )
 
-          /*
-           * Only show actual design jobs.
-           *
-           * IMPORTANT:
-           * Finished design jobs are excluded here.
-           *
-           * Therefore, immediately after:
-           *
-           * statuses.design = 'Finished'
-           *
-           * Firestore onSnapshot runs again and
-           * the completed job disappears from
-           * the Designer page automatically.
-           */
-          const activeDesignOrders =
-            orders.filter(
-              (order) =>
-                order.officeInfo
-                  .designJob === true &&
-                order.statuses?.design !==
-                  'Finished',
-            )
+          jobOrdersLoaded = true
 
-          setJobOrders(
-            activeDesignOrders,
-          )
-
-          setLoading(false)
+          updateCombinedJobs()
         },
         (firebaseError) => {
           console.error(
-            'Error fetching designer jobs:',
+            'Error fetching job orders:',
             firebaseError,
           )
 
           setError(
-            'Unable to load designer work.',
+            'Unable to load Job Order design work.',
           )
 
           setLoading(false)
         },
       )
 
-    return () => unsubscribe()
+    const unsubscribeMeasurements =
+      onSnapshot(
+        measurementsQuery,
+        (snapshot) => {
+          measurements =
+            snapshot.docs.map(
+              (document) =>
+                normalizeMeasurement(
+                  document.id,
+                  document.data(),
+                ),
+            )
+
+          measurementsLoaded = true
+
+          updateCombinedJobs()
+        },
+        (firebaseError) => {
+          console.error(
+            'Error fetching measurements:',
+            firebaseError,
+          )
+
+          setError(
+            'Unable to load Measurement design work.',
+          )
+
+          setLoading(false)
+        },
+      )
+
+    return () => {
+      unsubscribeJobOrders()
+      unsubscribeMeasurements()
+    }
   }, [])
 
   /*
    * =========================================
-   * CHECK ASSIGNMENT
+   * ASSIGNMENT
    * =========================================
    */
 
   const isAssignedToCurrentUser = (
-    order: JobOrder,
+    order: UnifiedDesignJob,
   ) => {
-    /*
-     * Prefer username because it is
-     * unique and stable.
-     */
-
     if (
       order.officeInfo
         .designerUsername
@@ -412,37 +905,57 @@ function Designer({
       )
     }
 
-    /*
-     * Backward compatibility for older
-     * records that only contain designer name.
-     */
-
     return (
       !!order.officeInfo.designer &&
-      order.officeInfo.designer ===
+      order.officeInfo
+        .designer ===
         currentUser.name
     )
   }
 
   /*
    * =========================================
-   * ITEM STATE
+   * JOB SOURCE LABEL
+   * =========================================
+   */
+
+  const getSourceLabel = (
+    order: UnifiedDesignJob,
+  ) => {
+    return order.source ===
+      'measurements'
+      ? 'Measurement'
+      : 'Job Order'
+  }
+
+  /*
+   * =========================================
+   * ITEM PROGRESS
    * =========================================
    */
 
   const hasStartedDesignWork = (
-    order: JobOrder,
+    order: UnifiedDesignJob,
   ) => {
-    return order.items.some(
-      (item) =>
-        item.designStatus ===
-          'finished' ||
-        item.designStatus === 'na',
+    /*
+     * A Measurement is considered started once
+     * it has been accepted by a designer or any
+     * item has already been completed/marked NA.
+     */
+    return (
+      order.statuses.design ===
+        'In Progress' ||
+      order.items.some(
+        (item) =>
+          item.designStatus ===
+            'finished' ||
+          item.designStatus === 'na',
+      )
     )
   }
 
   const areAllItemsFinished = (
-    order: JobOrder,
+    order: UnifiedDesignJob,
   ) => {
     if (
       order.items.length === 0
@@ -450,6 +963,10 @@ function Designer({
       return false
     }
 
+    /*
+     * Both Job Orders and Measurements use the
+     * same per-item designStatus now.
+     */
     return order.items.every(
       (item) =>
         item.designStatus ===
@@ -460,76 +977,82 @@ function Designer({
 
   /*
    * =========================================
-   * AVAILABLE WORK
+   * VISIBLE ORDERS
    * =========================================
-   *
-   * My Work:
-   *   Only jobs assigned to current designer.
-   *
-   * All Work:
-   *   Every active design job.
-   *
-   * Finished jobs are already removed from
-   * jobOrders above.
    */
 
-  const visibleOrders = useMemo(() => {
-    if (showAllWork) {
-      return jobOrders
-    }
+  const visibleOrders =
+    useMemo(() => {
+      if (showAllWork) {
+        return designJobs
+      }
 
-    return jobOrders.filter(
-      (order) =>
-        isAssignedToCurrentUser(
-          order,
-        ),
-    )
-  }, [
-    jobOrders,
-    showAllWork,
-    currentUser.username,
-    currentUser.name,
-  ])
+      return designJobs.filter(
+        (order) =>
+          isAssignedToCurrentUser(
+            order,
+          ),
+      )
+    }, [
+      designJobs,
+      showAllWork,
+      currentUser.username,
+      currentUser.name,
+    ])
 
   /*
    * =========================================
    * COUNTS
    * =========================================
-   *
-   * Finished count has been removed.
    */
 
-  const pendingCount = useMemo(() => {
-    return visibleOrders.filter(
-      (order) =>
-        !areAllItemsFinished(order),
-    ).length
-  }, [visibleOrders])
+  const pendingCount =
+    useMemo(() => {
+      return visibleOrders.filter(
+        (order) =>
+          !(
+            order.source ===
+              'measurements' &&
+            order.statuses
+              .design ===
+              'In Progress'
+          ) &&
+          !areAllItemsFinished(
+            order,
+          ),
+      ).length
+    }, [visibleOrders])
 
-  const todayCount = useMemo(() => {
-    const today =
-      getTodayString()
+  const todayCount =
+    useMemo(() => {
+      const today =
+        getTodayString()
 
-    return visibleOrders.filter(
-      (order) =>
-        order.expectedDeliveryDate ===
-        today &&
-        !areAllItemsFinished(order),
-    ).length
-  }, [visibleOrders])
+      return visibleOrders.filter(
+        (order) =>
+          order.expectedDeliveryDate ===
+            today &&
+          !areAllItemsFinished(
+            order,
+          ),
+      ).length
+    }, [visibleOrders])
 
-  const lateCount = useMemo(() => {
-    const today =
-      getTodayString()
+  const lateCount =
+    useMemo(() => {
+      const today =
+        getTodayString()
 
-    return visibleOrders.filter(
-      (order) =>
-        !!order.expectedDeliveryDate &&
-        order.expectedDeliveryDate <
-          today &&
-        !areAllItemsFinished(order),
-    ).length
-  }, [visibleOrders])
+      return visibleOrders.filter(
+        (order) =>
+          !!order.expectedDeliveryDate &&
+          order.expectedDeliveryDate <
+            today &&
+          !areAllItemsFinished(
+            order,
+          ),
+      ).length
+    }, [visibleOrders])
 
   /*
    * =========================================
@@ -537,48 +1060,51 @@ function Designer({
    * =========================================
    */
 
-  const filteredOrders = useMemo(() => {
-    const today =
-      getTodayString()
+  const filteredOrders =
+    useMemo(() => {
+      const today =
+        getTodayString()
 
-    switch (activeFilter) {
-      case 'pending':
-        return visibleOrders.filter(
-          (order) =>
-            !areAllItemsFinished(
-              order,
-            ),
-        )
+      switch (
+        activeFilter
+      ) {
+        case 'pending':
+          return visibleOrders.filter(
+            (order) =>
+              !areAllItemsFinished(
+                order,
+              ),
+          )
 
-      case 'today':
-        return visibleOrders.filter(
-          (order) =>
-            order.expectedDeliveryDate ===
-              today &&
-            !areAllItemsFinished(
-              order,
-            ),
-        )
+        case 'today':
+          return visibleOrders.filter(
+            (order) =>
+              order.expectedDeliveryDate ===
+                today &&
+              !areAllItemsFinished(
+                order,
+              ),
+          )
 
-      case 'late':
-        return visibleOrders.filter(
-          (order) =>
-            !!order.expectedDeliveryDate &&
-            order.expectedDeliveryDate <
-              today &&
-            !areAllItemsFinished(
-              order,
-            ),
-        )
+        case 'late':
+          return visibleOrders.filter(
+            (order) =>
+              !!order.expectedDeliveryDate &&
+              order.expectedDeliveryDate <
+                today &&
+              !areAllItemsFinished(
+                order,
+              ),
+          )
 
-      case 'all':
-      default:
-        return visibleOrders
-    }
-  }, [
-    visibleOrders,
-    activeFilter,
-  ])
+        case 'all':
+        default:
+          return visibleOrders
+      }
+    }, [
+      visibleOrders,
+      activeFilter,
+    ])
 
   /*
    * =========================================
@@ -589,9 +1115,13 @@ function Designer({
   const handleFilterClick = (
     filter: DesignerFilter,
   ) => {
-    setActiveFilter(filter)
+    setActiveFilter(
+      filter,
+    )
 
-    setExpandedOrder(null)
+    setExpandedOrder(
+      null,
+    )
   }
 
   /*
@@ -601,22 +1131,40 @@ function Designer({
    */
 
   const handleAcceptWork = async (
-    order: JobOrder,
+    order: UnifiedDesignJob,
   ) => {
     if (
-      acceptingOrder === order.id
+      acceptingOrder ===
+      order.id
     ) {
       return
     }
 
     /*
-     * Once an item has been marked NA
-     * or finished, another designer must
-     * not be able to take this order.
+     * Measurement quotation protection.
      */
-
     if (
-      hasStartedDesignWork(order)
+      order.source ===
+        'measurements' &&
+      order.quotationStatus !==
+        'Confirmed'
+    ) {
+      alert(
+        'Quotation must be confirmed before design work can be accepted.',
+      )
+
+      return
+    }
+
+    /*
+     * If someone has already started
+     * the work, do not allow another
+     * designer to accept it.
+     */
+    if (
+      hasStartedDesignWork(
+        order,
+      )
     ) {
       alert(
         'This design work has already started. Another designer cannot accept this order.',
@@ -625,15 +1173,23 @@ function Designer({
       return
     }
 
-    setAcceptingOrder(order.id)
+    setAcceptingOrder(
+      order.id,
+    )
 
     setError('')
 
     try {
+      const collectionName =
+        order.source ===
+        'measurements'
+          ? 'measurements'
+          : 'job_orders'
+
       await updateDoc(
         doc(
           db,
-          'job_orders',
+          collectionName,
           order.id,
         ),
         {
@@ -657,34 +1213,34 @@ function Designer({
         'Unable to accept this work.',
       )
     } finally {
-      setAcceptingOrder(null)
+      setAcceptingOrder(
+        null,
+      )
     }
   }
 
   /*
    * =========================================
-   * UPDATE ITEM STATUS
+   * UPDATE JOB ORDER ITEM STATUS
    * =========================================
    */
 
   const handleItemStatus = async (
-    order: JobOrder,
+    order: UnifiedDesignJob,
     itemIndex: number,
     status:
       | 'finished'
       | 'na',
   ) => {
+    const itemKey =
+      `${order.source}-${order.id}-${itemIndex}`
+
     if (
       savingItem ===
-      `${order.id}-${itemIndex}`
+      itemKey
     ) {
       return
     }
-
-    /*
-     * Only the assigned designer can
-     * update item design status.
-     */
 
     if (
       !isAssignedToCurrentUser(
@@ -699,7 +1255,7 @@ function Designer({
     }
 
     if (
-      order.statuses?.design ===
+      order.statuses.design ===
       'Finished'
     ) {
       return
@@ -707,30 +1263,42 @@ function Designer({
 
     const updatedItems =
       order.items.map(
-        (item, index) =>
-          index === itemIndex
+        (
+          item,
+          index,
+        ) =>
+          index ===
+          itemIndex
             ? {
                 ...item,
-                designStatus: status,
+                designStatus:
+                  status,
               }
             : item,
       )
 
     setSavingItem(
-      `${order.id}-${itemIndex}`,
+      itemKey,
     )
 
     setError('')
 
     try {
+      const collectionName =
+        order.source ===
+        'measurements'
+          ? 'measurements'
+          : 'job_orders'
+
       await updateDoc(
         doc(
           db,
-          'job_orders',
+          collectionName,
           order.id,
         ),
         {
-          items: updatedItems,
+          items:
+            updatedItems,
 
           'statuses.design':
             'In Progress',
@@ -752,18 +1320,20 @@ function Designer({
         'Unable to update item status.',
       )
     } finally {
-      setSavingItem(null)
+      setSavingItem(
+        null,
+      )
     }
   }
 
   /*
    * =========================================
-   * OPEN FINISH DIALOG
+   * OPEN FINISH
    * =========================================
    */
 
   const handleOpenFinish = (
-    order: JobOrder,
+    order: UnifiedDesignJob,
   ) => {
     if (
       !isAssignedToCurrentUser(
@@ -778,7 +1348,20 @@ function Designer({
     }
 
     if (
-      !areAllItemsFinished(order)
+      order.statuses.design !==
+      'In Progress'
+    ) {
+      alert(
+        'Accept this design work before finishing it.',
+      )
+
+      return
+    }
+
+    if (
+      !areAllItemsFinished(
+        order,
+      )
     ) {
       alert(
         'Every item must be marked Finished Design or NA before completing the order.',
@@ -796,7 +1379,9 @@ function Designer({
         : '',
     )
 
-    setFinishOrderId(order.id)
+    setFinishOrderId(
+      order.id,
+    )
   }
 
   /*
@@ -807,30 +1392,67 @@ function Designer({
 
   const handleFinishDesign =
     async () => {
-      if (!finishOrderId) {
+      if (
+        !finishOrderId
+      ) {
         return
       }
 
       const order =
-        jobOrders.find(
+        designJobs.find(
           (item) =>
             item.id ===
-            finishOrderId,
+              finishOrderId,
         )
 
       if (!order) {
         return
       }
 
+      /*
+       * =====================================
+       * JOB ORDER FINISH
+       * =====================================
+       */
+
       if (
-        !areAllItemsFinished(order)
+        !isAssignedToCurrentUser(
+          order,
+        )
       ) {
         alert(
-          'All items must be completed first.',
+          'Only the assigned designer can finish this work.',
         )
 
         return
       }
+
+      if (
+        order.statuses.design !==
+        'In Progress'
+      ) {
+        alert(
+          'Design must be In Progress before it can be finished.',
+        )
+
+        return
+      }
+
+      if (
+        !areAllItemsFinished(
+          order,
+        )
+      ) {
+        alert(
+          'All items must be marked Finished Design or NA before completing the order.',
+        )
+
+        return
+      }
+
+      const isMeasurement =
+        order.source ===
+        'measurements'
 
       const charge =
         Number(
@@ -838,10 +1460,11 @@ function Designer({
         )
 
       if (
-        designCharge.trim() ===
+        !isMeasurement &&
+        (designCharge.trim() ===
           '' ||
-        Number.isNaN(charge) ||
-        charge < 0
+          Number.isNaN(charge) ||
+          charge < 0)
       ) {
         alert(
           'Please enter a valid design charge.',
@@ -857,44 +1480,48 @@ function Designer({
       setError('')
 
       try {
-        /*
-         * This changes the Firestore status
-         * to Finished.
-         *
-         * The onSnapshot listener will receive
-         * the updated document and exclude it
-         * from jobOrders.
-         *
-         * Therefore the job disappears from
-         * the Designer page automatically.
-         */
+        const collectionName =
+          isMeasurement
+            ? 'measurements'
+            : 'job_orders'
+
+        const updateData: Record<string, unknown> = {
+          items:
+            order.items,
+
+          'statuses.design':
+            'Finished',
+
+          'officeInfo.designer':
+            currentUser.name,
+
+          'officeInfo.designerUsername':
+            currentUser.username,
+        }
+
+        if (!isMeasurement) {
+          updateData.designCharge =
+            charge
+        }
+
         await updateDoc(
           doc(
             db,
-            'job_orders',
+            collectionName,
             order.id,
           ),
-          {
-            items: order.items,
-
-            'statuses.design':
-              'Finished',
-
-            designCharge: charge,
-
-            'officeInfo.designer':
-              currentUser.name,
-
-            'officeInfo.designerUsername':
-              currentUser.username,
-          },
+          updateData,
         )
 
-        setFinishOrderId(null)
+        setFinishOrderId(
+          null,
+        )
 
         setDesignCharge('')
 
-        setExpandedOrder(null)
+        setExpandedOrder(
+          null,
+        )
       } catch (firebaseError) {
         console.error(
           'Error finishing design:',
@@ -905,7 +1532,9 @@ function Designer({
           'Unable to finish design work.',
         )
       } finally {
-        setFinishingOrder(null)
+        setFinishingOrder(
+          null,
+        )
       }
     }
 
@@ -916,7 +1545,7 @@ function Designer({
    */
 
   const getOrderId = (
-    order: JobOrder,
+    order: UnifiedDesignJob,
   ) => {
     if (
       order.orderId !==
@@ -936,7 +1565,7 @@ function Designer({
    */
 
   const getDesignerLabel = (
-    order: JobOrder,
+    order: UnifiedDesignJob,
   ) => {
     if (
       isAssignedToCurrentUser(
@@ -977,12 +1606,10 @@ function Designer({
 
             <p>
               Design work • Priority:
-              Design → Printing →
+              Design → Printing/Cutting →
               Production
             </p>
           </div>
-
-          {/* MY WORK / ALL WORK */}
 
           <button
             type="button"
@@ -996,7 +1623,9 @@ function Designer({
                 !showAllWork,
               )
 
-              setExpandedOrder(null)
+              setExpandedOrder(
+                null,
+              )
             }}
           >
             {showAllWork
@@ -1005,7 +1634,6 @@ function Designer({
           </button>
 
         </div>
-
 
         {/* =====================================
             ERROR
@@ -1017,19 +1645,17 @@ function Designer({
           </div>
         )}
 
-
         {/* =====================================
             DASHBOARD FILTERS
         ====================================== */}
 
         <div className="statistics-dashboard">
 
-          {/* ALL */}
-
           <button
             type="button"
             className={
-              activeFilter === 'all'
+              activeFilter ===
+              'all'
                 ? 'statistics-card selected'
                 : 'statistics-card'
             }
@@ -1051,9 +1677,6 @@ function Designer({
               All active design orders
             </div>
           </button>
-
-
-          {/* PENDING */}
 
           <button
             type="button"
@@ -1082,9 +1705,6 @@ function Designer({
             </div>
           </button>
 
-
-          {/* TODAY */}
-
           <button
             type="button"
             className={
@@ -1112,13 +1732,11 @@ function Designer({
             </div>
           </button>
 
-
-          {/* LATE */}
-
           <button
             type="button"
             className={
-              activeFilter === 'late'
+              activeFilter ===
+              'late'
                 ? 'statistics-card selected'
                 : 'statistics-card'
             }
@@ -1142,7 +1760,6 @@ function Designer({
           </button>
 
         </div>
-
 
         {/* =====================================
             CURRENT MODE
@@ -1183,7 +1800,6 @@ function Designer({
 
         </div>
 
-
         {/* =====================================
             ORDERS
         ====================================== */}
@@ -1210,13 +1826,11 @@ function Designer({
 
           </div>
 
-
           {loading && (
             <div className="empty-items">
               Loading design work...
             </div>
           )}
-
 
           {!loading &&
             filteredOrders.length ===
@@ -1236,7 +1850,6 @@ function Designer({
               </div>
             )}
 
-
           {!loading &&
             filteredOrders.length >
               0 && (
@@ -1244,9 +1857,10 @@ function Designer({
 
                 {filteredOrders.map(
                   (order) => {
+
                     const isExpanded =
                       expandedOrder ===
-                      order.id
+                      `${order.source}-${order.id}`
 
                     const assignedToMe =
                       isAssignedToCurrentUser(
@@ -1263,15 +1877,13 @@ function Designer({
                         order,
                       )
 
-                    /*
-                     * Finished jobs should never
-                     * reach this list because they
-                     * are filtered from jobOrders.
-                     */
+                    const isMeasurement =
+                      order.source ===
+                      'measurements'
 
                     return (
                       <div
-                        key={order.id}
+                        key={`${order.source}-${order.id}`}
                         className="statistics-order-card"
                       >
 
@@ -1284,7 +1896,10 @@ function Designer({
                           <div>
 
                             <div className="job-order-id">
-                              Order ID:{' '}
+                              {getSourceLabel(
+                                order,
+                              )}{' '}
+                              ID:{' '}
                               {getOrderId(
                                 order,
                               )}
@@ -1306,14 +1921,7 @@ function Designer({
 
                           </div>
 
-
                           <div className="statistics-order-meta">
-
-                            <span>
-                              Branch:{' '}
-                              {order.branch ||
-                                '-'}
-                            </span>
 
                             <span>
                               Delivery:{' '}
@@ -1329,10 +1937,16 @@ function Designer({
                               )}
                             </span>
 
+                            <span>
+                              Source:{' '}
+                              {getSourceLabel(
+                                order,
+                              )}
+                            </span>
+
                           </div>
 
                         </div>
-
 
                         {/* =================================
                             SUMMARY
@@ -1353,7 +1967,6 @@ function Designer({
                             </span>
                           </div>
 
-
                           <div>
                             <strong>
                               Design Status
@@ -1362,11 +1975,10 @@ function Designer({
                             <span>
                               {order
                                 .statuses
-                                ?.design ||
+                                .design ||
                                 'Pending'}
                             </span>
                           </div>
-
 
                           <div>
                             <strong>
@@ -1378,23 +1990,27 @@ function Designer({
                             </span>
                           </div>
 
-
                           <div>
                             <strong>
-                              Design Charge
+                              {isMeasurement
+                                ? 'Quotation'
+                                : 'Design Charge'}
                             </strong>
 
                             <span>
-                              {order
-                                .designCharge !==
-                              undefined
-                                ? `₹${order.designCharge}`
-                                : '-'}
+                              {isMeasurement
+                                ? order
+                                    .quotationStatus ||
+                                  'Pending'
+                                : order
+                                      .designCharge !==
+                                    undefined
+                                  ? `₹${order.designCharge}`
+                                  : '-'}
                             </span>
                           </div>
 
                         </div>
-
 
                         {/* =================================
                             ACTIONS
@@ -1412,7 +2028,12 @@ function Designer({
                                 className="add-item-button"
                                 disabled={
                                   acceptingOrder ===
-                                  order.id
+                                    order.id ||
+                                  (
+                                    isMeasurement &&
+                                    order.quotationStatus !==
+                                      'Confirmed'
+                                  )
                                 }
                                 onClick={() =>
                                   handleAcceptWork(
@@ -1423,10 +2044,13 @@ function Designer({
                                 {acceptingOrder ===
                                 order.id
                                   ? 'Accepting...'
-                                  : 'Accept Work'}
+                                  : isMeasurement &&
+                                      order.quotationStatus !==
+                                        'Confirmed'
+                                    ? 'Waiting for Quotation'
+                                    : 'Accept Work'}
                               </button>
                             )}
-
 
                           {/* ALREADY STARTED */}
 
@@ -1453,7 +2077,6 @@ function Designer({
                               </span>
                             )}
 
-
                           {/* VIEW */}
 
                           <button
@@ -1463,7 +2086,7 @@ function Designer({
                               setExpandedOrder(
                                 isExpanded
                                   ? null
-                                  : order.id,
+                                  : `${order.source}-${order.id}`,
                               )
                             }
                           >
@@ -1471,7 +2094,6 @@ function Designer({
                               ? 'Hide Details'
                               : 'View Details'}
                           </button>
-
 
                           {/* FINISH */}
 
@@ -1496,17 +2118,20 @@ function Designer({
                               title={
                                 allItemsDone
                                   ? 'Finish design'
-                                  : 'Complete all items first'
+                                  : isMeasurement
+                                    ? 'Design must be In Progress'
+                                    : 'Complete all items first'
                               }
                             >
-                              {allItemsDone
+                              {isMeasurement
                                 ? 'Finish Design'
-                                : 'Complete All Items'}
+                                : allItemsDone
+                                  ? 'Finish Design'
+                                  : 'Complete All Items'}
                             </button>
                           )}
 
                         </div>
-
 
                         {/* =================================
                             EXPANDED DETAILS
@@ -1523,6 +2148,30 @@ function Designer({
 
                               <div>
                                 <strong>
+                                  Source
+                                </strong>
+
+                                <span>
+                                  {getSourceLabel(
+                                    order,
+                                  )}
+                                </span>
+                              </div>
+
+                              <div>
+                                <strong>
+                                  Order / Measurement ID
+                                </strong>
+
+                                <span>
+                                  {getOrderId(
+                                    order,
+                                  )}
+                                </span>
+                              </div>
+
+                              <div>
+                                <strong>
                                   Customer
                                 </strong>
 
@@ -1533,7 +2182,6 @@ function Designer({
                                     '-'}
                                 </span>
                               </div>
-
 
                               <div>
                                 <strong>
@@ -1548,7 +2196,6 @@ function Designer({
                                 </span>
                               </div>
 
-
                               <div>
                                 <strong>
                                   Phone
@@ -1561,7 +2208,6 @@ function Designer({
                                     '-'}
                                 </span>
                               </div>
-
 
                               <div>
                                 <strong>
@@ -1576,7 +2222,6 @@ function Designer({
                                 </span>
                               </div>
 
-
                               <div>
                                 <strong>
                                   Place
@@ -1590,7 +2235,6 @@ function Designer({
                                 </span>
                               </div>
 
-
                               <div>
                                 <strong>
                                   Designer
@@ -1603,8 +2247,51 @@ function Designer({
                                 </span>
                               </div>
 
-                            </div>
+                              <div>
+                                <strong>
+                                  Design Status
+                                </strong>
 
+                                <span>
+                                  {order
+                                    .statuses
+                                    .design}
+                                </span>
+                              </div>
+
+                              {isMeasurement && (
+                                <div>
+                                  <strong>
+                                    Quotation
+                                  </strong>
+
+                                  <span>
+                                    {order
+                                      .quotationStatus ||
+                                      'Pending'}
+                                  </span>
+                                </div>
+                              )}
+
+                              {isMeasurement &&
+                                order
+                                  .quotationGeneratedBy && (
+                                  <div>
+                                    <strong>
+                                      Quotation Generated By
+                                    </strong>
+
+                                    <span>
+                                      {
+                                        order
+                                          .quotationGeneratedBy
+                                          .name
+                                      }
+                                    </span>
+                                  </div>
+                                )}
+
+                            </div>
 
                             {/* =================================
                                 ITEM LIST
@@ -1661,7 +2348,7 @@ function Designer({
                                     ) => {
 
                                       const itemKey =
-                                        `${order.id}-${itemIndex}`
+                                        `${order.source}-${order.id}-${itemIndex}`
 
                                       const itemDone =
                                         item.designStatus ===
@@ -1714,126 +2401,122 @@ function Designer({
                                           <td>
 
                                             <div
-                                              style={{
-                                                display:
-                                                  'flex',
-                                                gap:
-                                                  '6px',
-                                                flexWrap:
-                                                  'wrap',
-                                              }}
-                                            >
-
-                                              {/* NA */}
-
-                                              <button
-                                                type="button"
-                                                disabled={
-                                                  !assignedToMe ||
-                                                  savingItem ===
-                                                    itemKey ||
-                                                  itemDone ||
-                                                  itemNA
-                                                }
-                                                onClick={() =>
-                                                  handleItemStatus(
-                                                    order,
-                                                    itemIndex,
-                                                    'na',
-                                                  )
-                                                }
                                                 style={{
-                                                  border:
-                                                    '1px solid #cbd5e1',
-                                                  borderRadius:
-                                                    '7px',
-                                                  padding:
-                                                    '7px 10px',
-                                                  background:
+                                                  display:
+                                                    'flex',
+                                                  gap:
+                                                    '6px',
+                                                  flexWrap:
+                                                    'wrap',
+                                                }}
+                                              >
+
+                                                {/* NA */}
+
+                                                <button
+                                                  type="button"
+                                                  disabled={
+                                                    !assignedToMe ||
+                                                    savingItem ===
+                                                      itemKey ||
+                                                    itemDone ||
                                                     itemNA
-                                                      ? '#e2e8f0'
-                                                      : 'white',
+                                                  }
+                                                  onClick={() =>
+                                                    handleItemStatus(
+                                                      order,
+                                                      itemIndex,
+                                                      'na',
+                                                    )
+                                                  }
+                                                  style={{
+                                                    border:
+                                                      '1px solid #cbd5e1',
+                                                    borderRadius:
+                                                      '7px',
+                                                    padding:
+                                                      '7px 10px',
+                                                    background:
+                                                      itemNA
+                                                        ? '#e2e8f0'
+                                                        : 'white',
+                                                    color:
+                                                      '#475569',
+                                                    fontWeight:
+                                                      600,
+                                                    cursor:
+                                                      'pointer',
+                                                  }}
+                                                >
+                                                  NA
+                                                </button>
+
+                                                {/* FINISHED */}
+
+                                                <button
+                                                  type="button"
+                                                  disabled={
+                                                    !assignedToMe ||
+                                                    savingItem ===
+                                                      itemKey ||
+                                                    itemDone ||
+                                                    itemNA
+                                                  }
+                                                  onClick={() =>
+                                                    handleItemStatus(
+                                                      order,
+                                                      itemIndex,
+                                                      'finished',
+                                                    )
+                                                  }
+                                                  style={{
+                                                    border:
+                                                      '1px solid #86efac',
+                                                    borderRadius:
+                                                      '7px',
+                                                    padding:
+                                                      '7px 10px',
+                                                    background:
+                                                      itemDone
+                                                        ? '#dcfce7'
+                                                        : 'white',
+                                                    color:
+                                                      '#166534',
+                                                    fontWeight:
+                                                      700,
+                                                    cursor:
+                                                      'pointer',
+                                                  }}
+                                                >
+                                                  ✓
+                                                </button>
+
+                                              </div>
+
+                                              <div
+                                                style={{
+                                                  marginTop:
+                                                    '6px',
+                                                  fontSize:
+                                                    '12px',
                                                   color:
-                                                    '#475569',
+                                                    itemDone
+                                                      ? '#15803d'
+                                                      : itemNA
+                                                        ? '#64748b'
+                                                        : '#f59e0b',
                                                   fontWeight:
                                                     600,
-                                                  cursor:
-                                                    'pointer',
                                                 }}
                                               >
-                                                NA
-                                              </button>
+                                                {itemDone
+                                                  ? 'Design Finished'
+                                                  : itemNA
+                                                    ? 'Design NA'
+                                                    : 'Pending'}
+                                              </div>
 
-
-                                              {/* FINISHED */}
-
-                                              <button
-                                                type="button"
-                                                disabled={
-                                                  !assignedToMe ||
-                                                  savingItem ===
-                                                    itemKey ||
-                                                  itemDone ||
-                                                  itemNA
-                                                }
-                                                onClick={() =>
-                                                  handleItemStatus(
-                                                    order,
-                                                    itemIndex,
-                                                    'finished',
-                                                  )
-                                                }
-                                                style={{
-                                                  border:
-                                                    '1px solid #86efac',
-                                                  borderRadius:
-                                                    '7px',
-                                                  padding:
-                                                    '7px 10px',
-                                                  background:
-                                                    itemDone
-                                                      ? '#dcfce7'
-                                                      : 'white',
-                                                  color:
-                                                    '#166534',
-                                                  fontWeight:
-                                                    700,
-                                                  cursor:
-                                                    'pointer',
-                                                }}
-                                              >
-                                                ✓
-                                              </button>
-
-                                            </div>
-
-
-                                            {/* ITEM STATUS */}
-
-                                            <div
-                                              style={{
-                                                marginTop:
-                                                  '6px',
-                                                fontSize:
-                                                  '12px',
-                                                color:
-                                                  itemDone
-                                                    ? '#15803d'
-                                                    : itemNA
-                                                      ? '#64748b'
-                                                      : '#f59e0b',
-                                                fontWeight:
-                                                  600,
-                                              }}
-                                            >
-                                              {itemDone
-                                                ? 'Design Finished'
-                                                : itemNA
-                                                  ? 'Design NA'
-                                                  : 'Pending'}
-                                            </div>
-
-                                          </td>
+                                            </td>
 
                                         </tr>
                                       )
@@ -1846,46 +2529,95 @@ function Designer({
 
                             </div>
 
-
                             {/* =================================
-                                COMPLETION INFORMATION
+                                MEASUREMENT DESIGN STATUS
                             ================================== */}
 
-                            <div
-                              style={{
-                                marginTop:
-                                  '20px',
-                                padding:
-                                  '15px',
-                                borderRadius:
-                                  '10px',
-                                background:
-                                  allItemsDone
-                                    ? '#dcfce7'
-                                    : '#f8fafc',
-                                border:
-                                  '1px solid #e2e8f0',
-                              }}
-                            >
-
-                              <strong>
-                                Design Progress
-                              </strong>
-
-                              <p
+                            {isMeasurement && (
+                              <div
                                 style={{
-                                  margin:
-                                    '6px 0 0',
-                                  color:
-                                    '#64748b',
+                                  marginTop:
+                                    '20px',
+                                  padding:
+                                    '15px',
+                                  borderRadius:
+                                    '10px',
+                                  background:
+                                    order
+                                      .statuses
+                                      .design ===
+                                    'In Progress'
+                                      ? '#eff6ff'
+                                      : '#f8fafc',
+                                  border:
+                                    '1px solid #e2e8f0',
                                 }}
                               >
-                                {allItemsDone
-                                  ? 'All items are completed. Design can now be finished.'
-                                  : 'Every item must be marked ✓ Finished or NA before the order can be finished.'}
-                              </p>
 
-                            </div>
+                                <strong>
+                                  Measurement Design Progress
+                                </strong>
+
+                                <p
+                                  style={{
+                                    margin:
+                                      '6px 0 0',
+                                    color:
+                                      '#64748b',
+                                  }}
+                                >
+                                  {order
+                                    .statuses
+                                    .design ===
+                                  'In Progress'
+                                    ? 'Design work is currently assigned and in progress.'
+                                    : 'Accept this Measurement before starting design work.'}
+                                </p>
+
+                              </div>
+                            )}
+
+                            {/* =================================
+                                JOB ORDER COMPLETION INFORMATION
+                            ================================== */}
+
+                            {!isMeasurement && (
+                              <div
+                                style={{
+                                  marginTop:
+                                    '20px',
+                                  padding:
+                                    '15px',
+                                  borderRadius:
+                                    '10px',
+                                  background:
+                                    allItemsDone
+                                      ? '#dcfce7'
+                                      : '#f8fafc',
+                                  border:
+                                    '1px solid #e2e8f0',
+                                }}
+                              >
+
+                                <strong>
+                                  Design Progress
+                                </strong>
+
+                                <p
+                                  style={{
+                                    margin:
+                                      '6px 0 0',
+                                    color:
+                                      '#64748b',
+                                  }}
+                                >
+                                  {allItemsDone
+                                    ? 'All items are completed. Design can now be finished.'
+                                    : 'Every item must be marked ✓ Finished or NA before the order can be finished.'}
+                                </p>
+
+                              </div>
+                            )}
 
                           </div>
                         )}
@@ -1902,9 +2634,8 @@ function Designer({
 
       </div>
 
-
       {/* =========================================
-          DESIGN CHARGE MODAL
+          FINISH DESIGN MODAL
       ========================================== */}
 
       {finishOrderId && (
@@ -1913,7 +2644,8 @@ function Designer({
           <div
             className="edit-modal"
             style={{
-              maxWidth: '500px',
+              maxWidth:
+                '500px',
             }}
           >
 
@@ -1925,9 +2657,14 @@ function Designer({
                 </h2>
 
                 <p>
-                  Enter the design charge
-                  before completing this
-                  order.
+                  {designJobs.find(
+                    (order) =>
+                      order.id ===
+                      finishOrderId,
+                  )?.source ===
+                  'measurements'
+                    ? 'Complete the Measurement design work.'
+                    : 'Enter the design charge before completing this order.'}
                 </p>
               </div>
 
@@ -1947,30 +2684,57 @@ function Designer({
 
             </div>
 
+            {designJobs.find(
+              (order) =>
+                order.id ===
+                finishOrderId,
+            )?.source ===
+              'measurements' ? (
+              <div
+                style={{
+                  padding:
+                    '10px 0',
+                }}
+              >
+                <p
+                  style={{
+                    margin:
+                      0,
+                    color:
+                      '#64748b',
+                  }}
+                >
+                  Once you confirm, this
+                  Measurement will be marked
+                  as <strong>Design Finished</strong>.
+                </p>
+              </div>
+            ) : (
+              <div className="input-group">
 
-            <div className="input-group">
+                <label>
+                  Design Charge
+                </label>
 
-              <label>
-                Design Charge
-              </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    designCharge
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setDesignCharge(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="Enter design charge"
+                />
 
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={
-                  designCharge
-                }
-                onChange={(event) =>
-                  setDesignCharge(
-                    event.target.value,
-                  )
-                }
-                placeholder="Enter design charge"
-              />
-
-            </div>
-
+              </div>
+            )}
 
             <div className="form-actions">
 
@@ -1987,7 +2751,6 @@ function Designer({
               >
                 Cancel
               </button>
-
 
               <button
                 type="button"
@@ -2017,3 +2780,4 @@ function Designer({
 }
 
 export default Designer
+
