@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react'
 import {
   collection,
@@ -404,14 +403,6 @@ const normalizeMeasurement = (
     ? data.items
     : []
 
-  /*
-   * Measurement items normally do not have
-   * the Job Order designStatus field.
-   *
-   * Therefore they are kept as pending here
-   * and the overall statuses.design controls
-   * completion for Measurement jobs.
-   */
   const items: DesignItem[] =
     rawItems.map(
       (
@@ -471,10 +462,6 @@ const normalizeMeasurement = (
 
     source: 'measurements',
 
-    /*
-     * Measurement ID is used as the
-     * visible order identifier.
-     */
     orderId:
       data.measurementId ??
       data.orderId ??
@@ -553,10 +540,6 @@ const normalizeMeasurement = (
             ?.cuttingJob,
         ),
 
-      /*
-       * These fields are written by this
-       * Designer page when work is accepted.
-       */
       designer:
         data.officeInfo
           ?.designer ??
@@ -612,6 +595,12 @@ const normalizeMeasurement = (
         ),
     },
 
+    /*
+     * =====================================
+     * MEASUREMENT QUOTATION
+     * =====================================
+     */
+
     quotationStatus,
 
     quotationGeneratedBy:
@@ -632,6 +621,21 @@ const normalizeMeasurement = (
                   ?.username,
               ),
           }
+        : undefined,
+
+    /*
+     * =====================================
+     * DESIGN CHARGE
+     *
+     * Measurements can now also have
+     * a designCharge.
+     * =====================================
+     */
+
+    designCharge:
+      typeof data.designCharge ===
+      'number'
+        ? data.designCharge
         : undefined,
 
     createdAt:
@@ -686,13 +690,17 @@ function Designer({
   const [acceptingOrder, setAcceptingOrder] =
     useState<string | null>(null)
 
-  const [finishingOrder, setFinishingOrder] =
-    useState<string | null>(null)
+  /*
+   * DESIGN CHARGE
+   */
 
   const [designCharge, setDesignCharge] =
     useState('')
 
   const [finishOrderId, setFinishOrderId] =
+    useState<string | null>(null)
+
+  const [finishingOrder, setFinishingOrder] =
     useState<string | null>(null)
 
   /*
@@ -753,9 +761,11 @@ function Designer({
       }
 
       /*
-       * Job Orders:
-       * only actual design jobs.
+       * =====================================
+       * ACTIVE JOB ORDERS
+       * =====================================
        */
+
       const activeJobOrders =
         jobOrders.filter(
           (order) =>
@@ -767,12 +777,13 @@ function Designer({
         )
 
       /*
-       * Measurements:
+       * =====================================
+       * ACTIVE MEASUREMENTS
        *
-       * 1. designJob must be true
-       * 2. quotation must be Confirmed
-       * 3. design must not be Finished
+       * Quotation must be confirmed.
+       * =====================================
        */
+
       const activeMeasurements =
         measurements.filter(
           (measurement) =>
@@ -786,16 +797,22 @@ function Designer({
         )
 
       /*
-       * Combine both collections.
+       * =====================================
+       * COMBINE
+       * =====================================
        */
+
       const combined = [
         ...activeJobOrders,
         ...activeMeasurements,
       ]
 
       /*
-       * Newest first.
+       * =====================================
+       * NEWEST FIRST
+       * =====================================
        */
+
       combined.sort(
         (a, b) => {
           const aTime =
@@ -816,6 +833,12 @@ function Designer({
 
       setLoading(false)
     }
+
+    /*
+     * =====================================
+     * JOB ORDERS LISTENER
+     * =====================================
+     */
 
     const unsubscribeJobOrders =
       onSnapshot(
@@ -847,6 +870,12 @@ function Designer({
           setLoading(false)
         },
       )
+
+    /*
+     * =====================================
+     * MEASUREMENTS LISTENER
+     * =====================================
+     */
 
     const unsubscribeMeasurements =
       onSnapshot(
@@ -937,11 +966,6 @@ function Designer({
   const hasStartedDesignWork = (
     order: UnifiedDesignJob,
   ) => {
-    /*
-     * A Measurement is considered started once
-     * it has been accepted by a designer or any
-     * item has already been completed/marked NA.
-     */
     return (
       order.statuses.design ===
         'In Progress' ||
@@ -963,10 +987,6 @@ function Designer({
       return false
     }
 
-    /*
-     * Both Job Orders and Measurements use the
-     * same per-item designStatus now.
-     */
     return order.items.every(
       (item) =>
         item.designStatus ===
@@ -1143,6 +1163,7 @@ function Designer({
     /*
      * Measurement quotation protection.
      */
+
     if (
       order.source ===
         'measurements' &&
@@ -1157,10 +1178,10 @@ function Designer({
     }
 
     /*
-     * If someone has already started
-     * the work, do not allow another
-     * designer to accept it.
+     * Prevent another designer from
+     * accepting already-started work.
      */
+
     if (
       hasStartedDesignWork(
         order,
@@ -1221,7 +1242,7 @@ function Designer({
 
   /*
    * =========================================
-   * UPDATE JOB ORDER ITEM STATUS
+   * UPDATE ITEM STATUS
    * =========================================
    */
 
@@ -1370,6 +1391,11 @@ function Designer({
       return
     }
 
+    /*
+     * Load existing design charge
+     * if available.
+     */
+
     setDesignCharge(
       order.designCharge !==
         undefined
@@ -1411,7 +1437,7 @@ function Designer({
 
       /*
        * =====================================
-       * JOB ORDER FINISH
+       * CHECK ASSIGNMENT
        * =====================================
        */
 
@@ -1427,6 +1453,12 @@ function Designer({
         return
       }
 
+      /*
+       * =====================================
+       * CHECK DESIGN STATUS
+       * =====================================
+       */
+
       if (
         order.statuses.design !==
         'In Progress'
@@ -1437,6 +1469,12 @@ function Designer({
 
         return
       }
+
+      /*
+       * =====================================
+       * CHECK ALL ITEMS
+       * =====================================
+       */
 
       if (
         !areAllItemsFinished(
@@ -1450,9 +1488,15 @@ function Designer({
         return
       }
 
-      const isMeasurement =
-        order.source ===
-        'measurements'
+      /*
+       * =====================================
+       * DESIGN CHARGE
+       *
+       * NOW REQUIRED FOR BOTH:
+       * 1. Job Orders
+       * 2. Measurements
+       * =====================================
+       */
 
       const charge =
         Number(
@@ -1460,11 +1504,10 @@ function Designer({
         )
 
       if (
-        !isMeasurement &&
-        (designCharge.trim() ===
+        designCharge.trim() ===
           '' ||
-          Number.isNaN(charge) ||
-          charge < 0)
+        Number.isNaN(charge) ||
+        charge < 0
       ) {
         alert(
           'Please enter a valid design charge.',
@@ -1481,11 +1524,22 @@ function Designer({
 
       try {
         const collectionName =
-          isMeasurement
+          order.source ===
+          'measurements'
             ? 'measurements'
             : 'job_orders'
 
-        const updateData: Record<string, unknown> = {
+        /*
+         * =================================
+         * UPDATE DATA
+         * =================================
+         *
+         * designCharge is now saved for
+         * BOTH Job Orders and Measurements.
+         */
+
+        const updateData:
+          Record<string, unknown> = {
           items:
             order.items,
 
@@ -1497,11 +1551,9 @@ function Designer({
 
           'officeInfo.designerUsername':
             currentUser.username,
-        }
 
-        if (!isMeasurement) {
-          updateData.designCharge =
-            charge
+          designCharge:
+            charge,
         }
 
         await updateDoc(
@@ -1512,6 +1564,12 @@ function Designer({
           ),
           updateData,
         )
+
+        /*
+         * =================================
+         * RESET MODAL
+         * =================================
+         */
 
         setFinishOrderId(
           null,
@@ -2010,6 +2068,26 @@ function Designer({
                             </span>
                           </div>
 
+                          {/* Show design charge for Measurement
+                              if it has already been saved */}
+
+                          {isMeasurement &&
+                            order.designCharge !==
+                              undefined && (
+                            <div>
+                              <strong>
+                                Design Charge
+                              </strong>
+
+                              <span>
+                                ₹
+                                {
+                                  order.designCharge
+                                }
+                              </span>
+                            </div>
+                          )}
+
                         </div>
 
                         {/* =================================
@@ -2118,16 +2196,12 @@ function Designer({
                               title={
                                 allItemsDone
                                   ? 'Finish design'
-                                  : isMeasurement
-                                    ? 'Design must be In Progress'
-                                    : 'Complete all items first'
+                                  : 'Complete all items first'
                               }
                             >
-                              {isMeasurement
+                              {allItemsDone
                                 ? 'Finish Design'
-                                : allItemsDone
-                                  ? 'Finish Design'
-                                  : 'Complete All Items'}
+                                : 'Complete All Items'}
                             </button>
                           )}
 
@@ -2291,6 +2365,22 @@ function Designer({
                                   </div>
                                 )}
 
+                              {order.designCharge !==
+                                undefined && (
+                                <div>
+                                  <strong>
+                                    Design Charge
+                                  </strong>
+
+                                  <span>
+                                    ₹
+                                    {
+                                      order.designCharge
+                                    }
+                                  </span>
+                                </div>
+                              )}
+
                             </div>
 
                             {/* =================================
@@ -2401,122 +2491,122 @@ function Designer({
                                           <td>
 
                                             <div
+                                              style={{
+                                                display:
+                                                  'flex',
+                                                gap:
+                                                  '6px',
+                                                flexWrap:
+                                                  'wrap',
+                                              }}
+                                            >
+
+                                              {/* NA */}
+
+                                              <button
+                                                type="button"
+                                                disabled={
+                                                  !assignedToMe ||
+                                                  savingItem ===
+                                                    itemKey ||
+                                                  itemDone ||
+                                                  itemNA
+                                                }
+                                                onClick={() =>
+                                                  handleItemStatus(
+                                                    order,
+                                                    itemIndex,
+                                                    'na',
+                                                  )
+                                                }
                                                 style={{
-                                                  display:
-                                                    'flex',
-                                                  gap:
-                                                    '6px',
-                                                  flexWrap:
-                                                    'wrap',
-                                                }}
-                                              >
-
-                                                {/* NA */}
-
-                                                <button
-                                                  type="button"
-                                                  disabled={
-                                                    !assignedToMe ||
-                                                    savingItem ===
-                                                      itemKey ||
-                                                    itemDone ||
+                                                  border:
+                                                    '1px solid #cbd5e1',
+                                                  borderRadius:
+                                                    '7px',
+                                                  padding:
+                                                    '7px 10px',
+                                                  background:
                                                     itemNA
-                                                  }
-                                                  onClick={() =>
-                                                    handleItemStatus(
-                                                      order,
-                                                      itemIndex,
-                                                      'na',
-                                                    )
-                                                  }
-                                                  style={{
-                                                    border:
-                                                      '1px solid #cbd5e1',
-                                                    borderRadius:
-                                                      '7px',
-                                                    padding:
-                                                      '7px 10px',
-                                                    background:
-                                                      itemNA
-                                                        ? '#e2e8f0'
-                                                        : 'white',
-                                                    color:
-                                                      '#475569',
-                                                    fontWeight:
-                                                      600,
-                                                    cursor:
-                                                      'pointer',
-                                                  }}
-                                                >
-                                                  NA
-                                                </button>
-
-                                                {/* FINISHED */}
-
-                                                <button
-                                                  type="button"
-                                                  disabled={
-                                                    !assignedToMe ||
-                                                    savingItem ===
-                                                      itemKey ||
-                                                    itemDone ||
-                                                    itemNA
-                                                  }
-                                                  onClick={() =>
-                                                    handleItemStatus(
-                                                      order,
-                                                      itemIndex,
-                                                      'finished',
-                                                    )
-                                                  }
-                                                  style={{
-                                                    border:
-                                                      '1px solid #86efac',
-                                                    borderRadius:
-                                                      '7px',
-                                                    padding:
-                                                      '7px 10px',
-                                                    background:
-                                                      itemDone
-                                                        ? '#dcfce7'
-                                                        : 'white',
-                                                    color:
-                                                      '#166534',
-                                                    fontWeight:
-                                                      700,
-                                                    cursor:
-                                                      'pointer',
-                                                  }}
-                                                >
-                                                  ✓
-                                                </button>
-
-                                              </div>
-
-                                              <div
-                                                style={{
-                                                  marginTop:
-                                                    '6px',
-                                                  fontSize:
-                                                    '12px',
+                                                      ? '#e2e8f0'
+                                                      : 'white',
                                                   color:
-                                                    itemDone
-                                                      ? '#15803d'
-                                                      : itemNA
-                                                        ? '#64748b'
-                                                        : '#f59e0b',
+                                                    '#475569',
                                                   fontWeight:
                                                     600,
+                                                  cursor:
+                                                    'pointer',
                                                 }}
                                               >
-                                                {itemDone
-                                                  ? 'Design Finished'
-                                                  : itemNA
-                                                    ? 'Design NA'
-                                                    : 'Pending'}
-                                              </div>
+                                                NA
+                                              </button>
 
-                                            </td>
+                                              {/* FINISHED */}
+
+                                              <button
+                                                type="button"
+                                                disabled={
+                                                  !assignedToMe ||
+                                                  savingItem ===
+                                                    itemKey ||
+                                                  itemDone ||
+                                                  itemNA
+                                                }
+                                                onClick={() =>
+                                                  handleItemStatus(
+                                                    order,
+                                                    itemIndex,
+                                                    'finished',
+                                                  )
+                                                }
+                                                style={{
+                                                  border:
+                                                    '1px solid #86efac',
+                                                  borderRadius:
+                                                    '7px',
+                                                  padding:
+                                                    '7px 10px',
+                                                  background:
+                                                    itemDone
+                                                      ? '#dcfce7'
+                                                      : 'white',
+                                                  color:
+                                                    '#166534',
+                                                  fontWeight:
+                                                    700,
+                                                  cursor:
+                                                    'pointer',
+                                                }}
+                                              >
+                                                ✓
+                                              </button>
+
+                                            </div>
+
+                                            <div
+                                              style={{
+                                                marginTop:
+                                                  '6px',
+                                                fontSize:
+                                                  '12px',
+                                                color:
+                                                  itemDone
+                                                    ? '#15803d'
+                                                    : itemNA
+                                                      ? '#64748b'
+                                                      : '#f59e0b',
+                                                fontWeight:
+                                                  600,
+                                              }}
+                                            >
+                                              {itemDone
+                                                ? 'Design Finished'
+                                                : itemNA
+                                                  ? 'Design NA'
+                                                  : 'Pending'}
+                                            </div>
+
+                                          </td>
 
                                         </tr>
                                       )
@@ -2657,14 +2747,9 @@ function Designer({
                 </h2>
 
                 <p>
-                  {designJobs.find(
-                    (order) =>
-                      order.id ===
-                      finishOrderId,
-                  )?.source ===
-                  'measurements'
-                    ? 'Complete the Measurement design work.'
-                    : 'Enter the design charge before completing this order.'}
+                  Enter the design charge
+                  before completing this
+                  design work.
                 </p>
               </div>
 
@@ -2684,57 +2769,50 @@ function Designer({
 
             </div>
 
-            {designJobs.find(
-              (order) =>
-                order.id ===
-                finishOrderId,
-            )?.source ===
-              'measurements' ? (
-              <div
+            {/* =====================================
+                DESIGN CHARGE
+                NOW SHOWN FOR BOTH
+                JOB ORDER AND MEASUREMENT
+            ====================================== */}
+
+            <div className="input-group">
+
+              <label>
+                Design Charge
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={
+                  designCharge
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setDesignCharge(
+                    event.target.value,
+                  )
+                }
+                placeholder="Enter design charge"
+              />
+
+              <small
                 style={{
-                  padding:
-                    '10px 0',
+                  display:
+                    'block',
+                  marginTop:
+                    '6px',
+                  color:
+                    '#64748b',
                 }}
               >
-                <p
-                  style={{
-                    margin:
-                      0,
-                    color:
-                      '#64748b',
-                  }}
-                >
-                  Once you confirm, this
-                  Measurement will be marked
-                  as <strong>Design Finished</strong>.
-                </p>
-              </div>
-            ) : (
-              <div className="input-group">
+                Enter the amount charged
+                for the design work.
+              </small>
 
-                <label>
-                  Design Charge
-                </label>
-
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    designCharge
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setDesignCharge(
-                      event.target.value,
-                    )
-                  }
-                  placeholder="Enter design charge"
-                />
-
-              </div>
-            )}
+            </div>
 
             <div className="form-actions">
 
