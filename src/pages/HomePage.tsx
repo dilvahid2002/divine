@@ -1,5 +1,6 @@
 import './HomePage.css'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 
 interface HomePageProps {
   user: {
@@ -71,7 +72,21 @@ const departmentPaths: Record<string, string> = {
 function HomePage({
   user,
 }: HomePageProps) {
+
   const navigate = useNavigate()
+
+  /*
+   * =========================================
+   * USER MENU STATE
+   * =========================================
+   *
+   * false = menu closed
+   * true  = menu open
+   */
+
+  const [showUserMenu, setShowUserMenu] =
+    useState(false)
+
 
   /*
    * =========================================
@@ -82,20 +97,22 @@ function HomePage({
    *
    * Examples:
    *
-   * "Live Production"
-   * "live production"
-   * "LIVE PRODUCTION"
+   * Live Production
+   * live production
+   * LIVE PRODUCTION
    *
    * All will work.
    */
 
   const hasRole = (role: string) => {
+
     return user.roles.some(
       (userRole) =>
         userRole.trim().toLowerCase() ===
         role.trim().toLowerCase(),
     )
   }
+
 
   /*
    * =========================================
@@ -106,6 +123,7 @@ function HomePage({
   const handleDepartmentClick = (
     role: string,
   ) => {
+
     if (!hasRole(role)) {
       return
     }
@@ -118,6 +136,7 @@ function HomePage({
     }
   }
 
+
   /*
    * =========================================
    * NAVIGATE TO SALES STATISTICS
@@ -125,10 +144,37 @@ function HomePage({
    */
 
   const handleSalesStatisticsClick = () => {
+
     navigate(
       '/departments/sales-statistics',
     )
   }
+
+
+  /*
+   * =========================================
+   * LOGOUT
+   * =========================================
+   *
+   * We are NOT using Firebase logout here.
+   *
+   * We are also NOT changing App.tsx.
+   *
+   * Reloading "/" causes App.tsx to start again
+   * with:
+   *
+   * currentUser = null
+   *
+   * Therefore LoginPage will be displayed.
+   */
+
+  const handleLogout = () => {
+
+    setShowUserMenu(false)
+
+    window.location.href = '/'
+  }
+
 
   /*
    * =========================================
@@ -139,11 +185,17 @@ function HomePage({
   return (
     <div className="home-page">
 
+
       {/* =========================================
           HEADER
       ========================================== */}
 
       <header className="home-header">
+
+
+        {/* =======================================
+            TITLE / WELCOME
+        ======================================== */}
 
         <div>
 
@@ -152,7 +204,7 @@ function HomePage({
           </h1>
 
           <p>
-            Welcome,{' '}
+            Welcome{' '}
             <strong>
               {user.name}
             </strong>
@@ -160,13 +212,75 @@ function HomePage({
 
         </div>
 
-        <div className="user-info">
+
+        {/* =======================================
+            USER MENU
+        ======================================== */}
+
+        <div className="user-menu-container">
+
+
+          {/* =====================================
+              USER NAME BUTTON
+          ====================================== */}
+
           <button
             type="button"
             className="user-info"
+            onClick={() =>
+              setShowUserMenu(
+                !showUserMenu,
+              )
+            }
           >
-            {user.name}
+
+            <span>
+              {user.name}
+            </span>
+
+            <span className="user-arrow">
+              {showUserMenu
+                ? '▲'
+                : '▼'}
+            </span>
+
           </button>
+
+
+          {/* =====================================
+              USER DROPDOWN
+          ====================================== */}
+
+          {showUserMenu && (
+
+            <div className="user-dropdown">
+
+
+              {/* =================================
+                  LOGOUT
+              ================================== */}
+
+              {/* ================================= 
+    LOGOUT
+================================== */}
+
+          <button
+            type="button"
+            className="logout-button"
+            onClick={handleLogout}
+          >
+            <span className="logout-icon">
+              ↪
+            </span>
+
+            <span>
+              Logout
+            </span>
+          </button> 
+            </div>
+
+          )}
+
         </div>
 
       </header>
@@ -177,6 +291,7 @@ function HomePage({
       ========================================== */}
 
       <main className="home-content">
+
 
         {/* =========================================
             PAGE TITLE
@@ -201,6 +316,7 @@ function HomePage({
 
         <div className="department-grid">
 
+
           {/* =======================================
               SALES
           ======================================== */}
@@ -208,10 +324,12 @@ function HomePage({
           {(() => {
 
             const role = 'Sales'
+
             const isActive =
               hasRole(role)
 
             return (
+
               <button
                 key={role}
                 type="button"
@@ -237,12 +355,15 @@ function HomePage({
                 </div>
 
                 <div className="department-status">
+
                   {isActive
                     ? 'Available'
                     : 'No Access'}
+
                 </div>
 
               </button>
+
             )
 
           })()}
@@ -281,12 +402,14 @@ function HomePage({
 
           {(() => {
 
-            const role = 'Live Production'
+            const role =
+              'Live Production'
 
             const isActive =
               hasRole(role)
 
             return (
+
               <button
                 key={role}
                 type="button"
@@ -312,12 +435,15 @@ function HomePage({
                 </div>
 
                 <div className="department-status">
+
                   {isActive
                     ? 'Available'
                     : 'No Access'}
+
                 </div>
 
               </button>
+
             )
 
           })()}
@@ -338,6 +464,7 @@ function HomePage({
                 hasRole(role)
 
               return (
+
                 <button
                   key={role}
                   type="button"
@@ -363,12 +490,15 @@ function HomePage({
                   </div>
 
                   <div className="department-status">
+
                     {isActive
                       ? 'Available'
                       : 'No Access'}
+
                   </div>
 
                 </button>
+
               )
 
             })}

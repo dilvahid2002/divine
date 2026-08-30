@@ -2297,3 +2297,166 @@
     align-items: flex-start;
   }
 }
+
+/* =========================================
+   USER MENU CONTAINER
+========================================= */
+
+.user-menu-container {
+  position: relative;
+}
+
+
+/* =========================================
+   USER NAME BUTTON
+========================================= */
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 10px 16px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: transparent;
+
+  color: inherit;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: background 0.2s ease;
+}
+
+
+/* Hover on username */
+
+.user-info:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+
+/* =========================================
+   ARROW
+========================================= */
+
+.user-arrow {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+
+/* =========================================
+   USER DROPDOWN
+========================================= */
+
+.user-dropdown {
+  position: absolute;
+
+  top: calc(100% + 6px);
+  right: 0;
+
+  width: 150px;
+
+  background: #ffffff;
+
+  border: 1px solid #e0e0e0;
+
+  border-radius: 10px;
+
+  padding: 6px;
+
+  box-shadow:
+    0 8px 25px rgba(0, 0, 0, 0.15);
+
+  z-index: 9999;
+
+  animation: userDropdownOpen 0.15s ease-out;
+}
+
+
+/* =========================================
+   DROPDOWN ANIMATION
+========================================= */
+
+@keyframes userDropdownOpen {
+
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+}
+
+
+/* =========================================
+   LOGOUT BUTTON
+========================================= */
+
+.logout-button {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 11px 12px;
+
+  border: none;
+
+  border-radius: 7px;
+
+  background: transparent;
+
+  color: #d32f2f;
+
+  font-size: 14px;
+
+  font-weight: 500;
+
+  text-align: left;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+
+/* =========================================
+   LOGOUT HOVER
+========================================= */
+
+.logout-button:hover {
+  background: #ffebee;
+
+  color: #b71c1c;
+}
+
+
+/* =========================================
+   LOGOUT ICON
+========================================= */
+
+.logout-icon {
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 20px;
+
+  font-size: 17px;
+} 
