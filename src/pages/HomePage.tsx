@@ -260,10 +260,6 @@ function HomePage({
                   LOGOUT
               ================================== */}
 
-              {/* ================================= 
-    LOGOUT
-================================== */}
-
           <button
             type="button"
             className="logout-button"

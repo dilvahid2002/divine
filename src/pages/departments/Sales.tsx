@@ -40,6 +40,7 @@ interface JobItem {
   qty: string
   price: string
   remarks: string
+  [key: string]: unknown
 }
 
 interface AcceptingOrder {
@@ -69,9 +70,17 @@ interface JobOrder {
   officeInfo: {
     designJob: boolean
     printJob: boolean
+    cuttingJob: boolean
     productionJob: boolean
     designer?: string | null
+    designerUsername?: string | null
     printBranch?: string | null
+    cuttingBranch?: string | null
+    productionBranch?: string | null
+    cutting?: string | null
+    cuttingUsername?: string | null
+    productionStaff?: unknown[]
+    [key: string]: unknown
   }
 
   customerAdviser: {
@@ -99,6 +108,7 @@ interface JobOrder {
   statuses?: {
     design: JobStatus
     print: JobStatus
+    cutting?: JobStatus
     production: JobStatus
   }
 
@@ -145,6 +155,9 @@ function Sales({ user }: SalesProps) {
     useState('')
 
   const [printStatusFilter, setPrintStatusFilter] =
+    useState('')
+
+  const [cuttingStatusFilter, setCuttingStatusFilter] =
     useState('')
 
   const [productionStatusFilter, setProductionStatusFilter] =
@@ -252,13 +265,44 @@ function Sales({ user }: SalesProps) {
                   data.officeInfo?.productionJob ||
                   false,
 
+                cuttingJob:
+                  data.officeInfo?.cuttingJob ||
+                  false,
+
                 designer:
                   data.officeInfo?.designer ||
+                  null,
+
+                designerUsername:
+                  data.officeInfo?.designerUsername ||
                   null,
 
                 printBranch:
                   data.officeInfo?.printBranch ||
                   null,
+
+                cuttingBranch:
+                  data.officeInfo?.cuttingBranch ||
+                  null,
+
+                productionBranch:
+                  data.officeInfo?.productionBranch ||
+                  null,
+
+                cutting:
+                  data.officeInfo?.cutting ||
+                  null,
+
+                cuttingUsername:
+                  data.officeInfo?.cuttingUsername ||
+                  null,
+
+                productionStaff:
+                  Array.isArray(
+                    data.officeInfo?.productionStaff,
+                  )
+                    ? data.officeInfo.productionStaff
+                    : [],
               },
 
               customerAdviser: {
@@ -301,6 +345,10 @@ function Sales({ user }: SalesProps) {
 
                 print:
                   data.statuses?.print ||
+                  'Pending',
+
+                cutting:
+                  data.statuses?.cutting ||
                   'Pending',
 
                 production:
@@ -350,6 +398,7 @@ function Sales({ user }: SalesProps) {
     setDeliveryDateFilter('')
     setDesignStatusFilter('')
     setPrintStatusFilter('')
+    setCuttingStatusFilter('')
     setProductionStatusFilter('')
     setDeliveryStatusFilter('')
   }
@@ -450,8 +499,54 @@ function Sales({ user }: SalesProps) {
   // SAVE EDIT
   // =========================================
 
+  const stripUndefined = (
+    value: unknown,
+  ): unknown => {
+    if (Array.isArray(value)) {
+      return value
+        .filter(
+          (item) =>
+            item !== undefined,
+        )
+        .map((item) =>
+          stripUndefined(item),
+        )
+    }
+
+    if (
+      value &&
+      typeof value === 'object' &&
+      !(value instanceof Timestamp)
+    ) {
+      const cleaned: Record<
+        string,
+        unknown
+      > = {}
+
+      Object.entries(
+        value as Record<string, unknown>,
+      ).forEach(([key, item]) => {
+        if (item !== undefined) {
+          cleaned[key] =
+            stripUndefined(item)
+        }
+      })
+
+      return cleaned
+    }
+
+    return value
+  }
+
   const handleSaveEdit = async () => {
     if (!editingOrder) {
+      return
+    }
+
+    if (editingOrder.items.length === 0) {
+      setError(
+        'At least one item is required.',
+      )
       return
     }
 
@@ -463,18 +558,15 @@ function Sales({ user }: SalesProps) {
       )
 
       /*
-       * IMPORTANT:
+       * Sales can edit the order information,
+       * customer information, items and which
+       * departments are required.
        *
-       * statuses are intentionally NOT included here.
-       *
-       * Design / Printing / Production departments
-       * own their respective statuses.
-       *
-       * This prevents Sales from accidentally
-       * overwriting a status that another department
-       * has just changed.
+       * Department statuses are deliberately
+       * NOT written here. They remain owned by
+       * the respective departments.
        */
-      await updateDoc(orderRef, {
+      const updateData = stripUndefined({
         date:
           editingOrder.date,
 
@@ -495,9 +587,18 @@ function Sales({ user }: SalesProps) {
 
         delivered:
           editingOrder.delivered || false,
-      })
+
+        updatedAt:
+          Timestamp.now(),
+      }) as Record<string, unknown>
+
+      await updateDoc(
+        orderRef,
+        updateData,
+      )
 
       setEditingOrder(null)
+      setError('')
     } catch (updateError) {
       console.error(
         'Error updating job order:',
@@ -565,6 +666,118 @@ function Sales({ user }: SalesProps) {
     })
   }
 
+  const addItem = () => {
+    if (!editingOrder) {
+      return
+    }
+
+    const nextSlNo =
+      editingOrder.items.length > 0
+        ? Math.max(
+            ...editingOrder.items.map(
+              (item) =>
+                Number(item.slNo) || 0,
+            ),
+          ) + 1
+        : 1
+
+    const newItem: JobItem = {
+      slNo: nextSlNo,
+      name: '',
+      width: '',
+      height: '',
+      qty: '1',
+      price: '',
+      remarks: '',
+    }
+
+    setEditingOrder({
+      ...editingOrder,
+      items: [
+        ...editingOrder.items,
+        newItem,
+      ],
+    })
+  }
+
+  const removeItem = (
+    index: number,
+  ) => {
+    if (!editingOrder) {
+      return
+    }
+
+    if (editingOrder.items.length <= 1) {
+      window.alert(
+        'At least one item must remain in the job order.',
+      )
+      return
+    }
+
+    const updatedItems =
+      editingOrder.items
+        .filter(
+          (_, itemIndex) =>
+            itemIndex !== index,
+        )
+        .map(
+          (item, itemIndex) => ({
+            ...item,
+            slNo: itemIndex + 1,
+          }),
+        )
+
+    setEditingOrder({
+      ...editingOrder,
+      items: updatedItems,
+    })
+  }
+
+  const updateJobType = (
+    field:
+      | 'designJob'
+      | 'printJob'
+      | 'cuttingJob'
+      | 'productionJob',
+    checked: boolean,
+  ) => {
+    if (!editingOrder) {
+      return
+    }
+
+    setEditingOrder({
+      ...editingOrder,
+      officeInfo: {
+        ...editingOrder.officeInfo,
+        [field]: checked,
+      },
+    })
+  }
+
+  const updateOfficeField = (
+    field:
+      | 'designer'
+      | 'designerUsername'
+      | 'printBranch'
+      | 'cuttingBranch'
+      | 'productionBranch'
+      | 'cutting',
+      value: string,
+  ) => {
+    if (!editingOrder) {
+      return
+    }
+
+    setEditingOrder({
+      ...editingOrder,
+      officeInfo: {
+        ...editingOrder.officeInfo,
+        [field]: value,
+      },
+    })
+  }
+
+  // =========================================
   // =========================================
   // FILTER JOB ORDERS
   // =========================================
@@ -577,6 +790,9 @@ function Sales({ user }: SalesProps) {
             'Pending' as JobStatus,
 
           print:
+            'Pending' as JobStatus,
+
+          cutting:
             'Pending' as JobStatus,
 
           production:
@@ -716,6 +932,18 @@ function Sales({ user }: SalesProps) {
         printStatusFilter &&
         statuses.print !==
           printStatusFilter
+      ) {
+        return false
+      }
+
+      // ---------------------------------------
+      // CUTTING STATUS
+      // ---------------------------------------
+
+      if (
+        cuttingStatusFilter &&
+        statuses.cutting !==
+          cuttingStatusFilter
       ) {
         return false
       }
@@ -1006,6 +1234,42 @@ function Sales({ user }: SalesProps) {
                   Finished
                 </option>
 
+              </select>
+
+            </div>
+
+            {/* CUTTING STATUS */}
+
+            <div className="filter-group">
+
+              <label htmlFor="cutting-status-filter">
+                Cutting Status
+              </label>
+
+              <select
+                id="cutting-status-filter"
+                value={cuttingStatusFilter}
+                onChange={(event) =>
+                  setCuttingStatusFilter(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  All
+                </option>
+
+                <option value="Pending">
+                  Pending
+                </option>
+
+                <option value="In Progress">
+                  In Progress
+                </option>
+
+                <option value="Finished">
+                  Finished
+                </option>
               </select>
 
             </div>
@@ -1339,6 +1603,20 @@ function Sales({ user }: SalesProps) {
 
                       <div className="status-value">
                         {statuses.print}
+                      </div>
+
+                    </div>
+                  )}
+
+                  {order.officeInfo.cuttingJob && (
+                    <div className="status-box">
+
+                      <label>
+                        Cutting Status
+                      </label>
+
+                      <div className="status-value">
+                        {statuses.cutting}
                       </div>
 
                     </div>
@@ -1775,6 +2053,32 @@ function Sales({ user }: SalesProps) {
                         </span>
                       )}
 
+                      {order.officeInfo.cuttingJob && (
+                        <span>
+                          Cutting Job
+                        </span>
+                      )}
+
+                      {order.officeInfo.cuttingBranch && (
+                        <span>
+                          Cutting Branch:{' '}
+                          {
+                            order.officeInfo
+                              .cuttingBranch
+                          }
+                        </span>
+                      )}
+
+                      {order.officeInfo.productionBranch && (
+                        <span>
+                          Production Branch:{' '}
+                          {
+                            order.officeInfo
+                              .productionBranch
+                          }
+                        </span>
+                      )}
+
                     </div>
 
                   </div>
@@ -2070,11 +2374,292 @@ function Sales({ user }: SalesProps) {
 
             </div>
 
-            {/* ITEMS */}
+            {/* JOB TYPES */}
 
             <h3>
-              Items
+              Job Types / Department Assignment
             </h3>
+
+            <p
+              style={{
+                marginTop: '-8px',
+                marginBottom: '16px',
+                color: '#667085',
+              }}
+            >
+              Select every department that must work on
+              this job. Existing department statuses are
+              kept unchanged when you edit these options.
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '12px',
+                marginBottom: '20px',
+              }}
+            >
+              {[
+                {
+                  key: 'designJob' as const,
+                  label: 'Designer',
+                },
+                {
+                  key: 'printJob' as const,
+                  label: 'Printing',
+                },
+                {
+                  key: 'cuttingJob' as const,
+                  label: 'Cutting',
+                },
+                {
+                  key: 'productionJob' as const,
+                  label: 'Production',
+                },
+              ].map((jobType) => (
+                <label
+                  key={jobType.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '14px',
+                    border: '1px solid #d0d5dd',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    background:
+                      editingOrder.officeInfo[
+                        jobType.key
+                      ]
+                        ? '#eef4ff'
+                        : '#fff',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={
+                      Boolean(
+                        editingOrder.officeInfo[
+                          jobType.key
+                        ],
+                      )
+                    }
+                    onChange={(event) =>
+                      updateJobType(
+                        jobType.key,
+                        event.target.checked,
+                      )
+                    }
+                  />
+                  <strong>
+                    {jobType.label}
+                  </strong>
+                </label>
+              ))}
+            </div>
+
+            {(editingOrder.officeInfo.designJob ||
+              editingOrder.officeInfo.printJob ||
+              editingOrder.officeInfo.cuttingJob ||
+              editingOrder.officeInfo.productionJob) && (
+              <div
+                className="form-grid"
+                style={{
+                  marginBottom: '20px',
+                }}
+              >
+                {editingOrder.officeInfo.designJob && (
+                  <>
+                    <div className="input-group">
+                      <label>
+                        Designer
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          editingOrder.officeInfo
+                            .designer || ''
+                        }
+                        onChange={(event) =>
+                          updateOfficeField(
+                            'designer',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Designer name (optional)"
+                      />
+                    </div>
+
+                    <div className="input-group">
+                      <label>
+                        Designer Username
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          editingOrder.officeInfo
+                            .designerUsername || ''
+                        }
+                        onChange={(event) =>
+                          updateOfficeField(
+                            'designerUsername',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Username (optional)"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {editingOrder.officeInfo.printJob && (
+                  <div className="input-group">
+                    <label>
+                      Printing Branch
+                    </label>
+                    <select
+                      value={
+                        editingOrder.officeInfo
+                          .printBranch || ''
+                      }
+                      onChange={(event) =>
+                        updateOfficeField(
+                          'printBranch',
+                          event.target.value,
+                        )
+                      }
+                    >
+                      <option value="">
+                        Select Printing Branch
+                      </option>
+                      <option value="Kalpetta">
+                        Kalpetta
+                      </option>
+                      <option value="Kondotty">
+                        Kondotty
+                      </option>
+                      <option value="Sulthan Bathery">
+                        Sulthan Bathery
+                      </option>
+                    </select>
+                  </div>
+                )}
+
+                {editingOrder.officeInfo.cuttingJob && (
+                  <>
+                    <div className="input-group">
+                      <label>
+                        Cutting Branch
+                      </label>
+                      <select
+                        value={
+                          editingOrder.officeInfo
+                            .cuttingBranch || ''
+                        }
+                        onChange={(event) =>
+                          updateOfficeField(
+                            'cuttingBranch',
+                            event.target.value,
+                          )
+                        }
+                      >
+                        <option value="">
+                          Select Cutting Branch
+                        </option>
+                        <option value="Kalpetta">
+                          Kalpetta
+                        </option>
+                        <option value="Kondotty">
+                          Kondotty
+                        </option>
+                        <option value="Sulthan Bathery">
+                          Sulthan Bathery
+                        </option>
+                      </select>
+                    </div>
+
+                    <div className="input-group">
+                      <label>
+                        Cutting Staff
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          editingOrder.officeInfo
+                            .cutting || ''
+                        }
+                        onChange={(event) =>
+                          updateOfficeField(
+                            'cutting',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Cutting staff (optional)"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {editingOrder.officeInfo.productionJob && (
+                  <div className="input-group">
+                    <label>
+                      Production Branch
+                    </label>
+                    <select
+                      value={
+                        editingOrder.officeInfo
+                          .productionBranch || ''
+                      }
+                      onChange={(event) =>
+                        updateOfficeField(
+                          'productionBranch',
+                          event.target.value,
+                        )
+                      }
+                    >
+                      <option value="">
+                        Select Production Branch
+                      </option>
+                      <option value="Kalpetta">
+                        Kalpetta
+                      </option>
+                      <option value="Kondotty">
+                        Kondotty
+                      </option>
+                      <option value="Sulthan Bathery">
+                        Sulthan Bathery
+                      </option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ITEMS */}
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                marginBottom: '12px',
+              }}
+            >
+              <h3 style={{ margin: 0 }}>
+                Items
+              </h3>
+
+              <button
+                type="button"
+                className="add-item-button"
+                onClick={addItem}
+              >
+                + Add Item
+              </button>
+            </div>
 
             <div className="items-table-wrapper">
 
@@ -2110,6 +2695,10 @@ function Sales({ user }: SalesProps) {
                     <th>
                       Remarks
                     </th>
+
+                    <th>
+                      Action
+                    </th>
                   </tr>
 
                 </thead>
@@ -2119,9 +2708,7 @@ function Sales({ user }: SalesProps) {
                   {editingOrder.items.map(
                     (item, index) => (
                       <tr
-                        key={
-                          item.slNo
-                        }
+                        key={`${item.slNo}-${item.name}`}
                       >
 
                         <td>
@@ -2240,6 +2827,18 @@ function Sales({ user }: SalesProps) {
                               )
                             }
                           />
+                        </td>
+
+                        <td>
+                          <button
+                            type="button"
+                            className="delete-button"
+                            onClick={() =>
+                              removeItem(index)
+                            }
+                          >
+                            Remove
+                          </button>
                         </td>
 
                       </tr>
