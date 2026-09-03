@@ -2460,3 +2460,459 @@
 
   font-size: 17px;
 } 
+/* =========================================================
+   Accountant Department Page
+   Designed to visually match the modern department/work
+   pages: soft background, white work cards, clear sections,
+   pill statuses, strong tables and polished dialogs.
+========================================================= */
+
+.accountant-page {
+  min-height: 100vh;
+  background: #1c4070 !important;
+  color: #d4c1c1;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+.accountant-container {
+  width: 100%;
+  max-width: 1400px !important;
+  margin: 0 auto !important;
+}
+
+.accountant-header {
+  padding: 4px 0 20px;
+  border-bottom: 1px solid #e7ebf2;
+}
+
+.accountant-header h1 {
+  margin: 0 !important;
+  font-size: 34px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.7px;
+  color: #fdfeff;
+  
+  
+}
+
+.accountant-header p {
+  margin: 8px 0 0 !important;
+  color: #667085 !important;
+  font-size: 15px;
+}
+
+.accountant-back-button {
+  min-height: 40px;
+  padding: 8px 16px !important;
+  border: 1px solid #cfd6e2 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #344054 !important;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.accountant-back-button:hover {
+  background: #f8fafc !important;
+  border-color: #98a2b3 !important;
+}
+
+.accountant-toolbar {
+  align-items: center;
+  padding: 14px;
+  margin: 18px 0 20px !important;
+  background: #fff;
+  border: 1px solid #e4e8ef;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
+}
+
+.accountant-tab {
+  min-height: 40px;
+  padding: 9px 16px !important;
+  border: 1px solid #cfd6e2 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #344054 !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.accountant-tab:hover {
+  background: #f8fafc !important;
+}
+
+.accountant-tab.active {
+  background: #182230 !important;
+  border-color: #182230 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 5px rgba(16, 24, 40, 0.16);
+}
+
+.accountant-search {
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 9px 13px !important;
+  border: 1px solid #cfd6e2 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #101828;
+  outline: none;
+  font-size: 14px;
+}
+
+.accountant-search:focus,
+.accountant-filter:focus,
+.accountant-page input:focus,
+.accountant-page select:focus {
+  border-color: #98a2b3 !important;
+  box-shadow: 0 0 0 3px rgba(152, 162, 179, 0.16);
+}
+
+.accountant-filter {
+  min-height: 40px;
+  padding: 9px 13px !important;
+  border: 1px solid #cfd6e2 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #344054 !important;
+  font-size: 14px;
+}
+
+.accountant-loading,
+.accountant-empty {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: #fff !important;
+  border: 1px solid #e4e8ef;
+  border-radius: 12px !important;
+  color: #667085;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
+}
+
+.accountant-empty {
+  flex-direction: column;
+  font-size: 15px;
+}
+
+.accountant-jobs {
+  gap: 18px !important;
+}
+
+.accountant-job-card {
+  position: relative;
+  overflow: hidden;
+  background: #fff !important;
+  border: 1px solid #e5e9f0;
+  border-radius: 14px !important;
+  padding: 22px !important;
+  box-shadow: 0 5px 18px rgba(16, 24, 40, 0.06) !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.accountant-job-card:hover {
+  transform: translateY(-1px);
+  border-color: #d6dce6;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08) !important;
+}
+
+.accountant-job-header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.accountant-job-header h2 {
+  margin: 0 !important;
+  color: #101828;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.25px;
+}
+
+.accountant-job-header strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: #fff4e5;
+  color: #9a6700;
+  border: 1px solid #f4d7a1;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.accountant-job-card small {
+  display: block;
+  margin-bottom: 5px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.accountant-job-card > div > div > div {
+  color: #1d2939;
+}
+
+.accountant-actions {
+  margin-top: 4px;
+}
+
+.accountant-actions button,
+.accountant-details button,
+.accountant-page button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #cfd6e2;
+  border-radius: 8px;
+  background: #fff;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.accountant-actions button:hover,
+.accountant-details button:hover,
+.accountant-page button:hover {
+  background: #f8fafc;
+  border-color: #98a2b3;
+}
+
+.accountant-actions button:first-child {
+  background: #182230;
+  color: #fff;
+  border-color: #182230;
+}
+
+.accountant-actions button:first-child:hover {
+  background: #101828;
+}
+
+.accountant-actions button:disabled,
+.accountant-details button:disabled,
+.accountant-page button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.accountant-details {
+  padding-top: 4px;
+  border-top: 1px solid #edf0f4;
+}
+
+.accountant-details h3,
+.accountant-subheading {
+  margin: 22px 0 12px !important;
+  color: #101828;
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.accountant-table-wrap {
+  border: 1px solid #e4e8ef;
+  border-radius: 10px;
+  overflow-x: auto !important;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.accountant-items-table {
+  width: 100% !important;
+  min-width: 760px;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  background: #fff;
+}
+
+.accountant-items-table thead th {
+  padding: 12px 13px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #dfe4ec !important;
+  background: #f8fafc;
+  color: #475467;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+}
+
+.accountant-items-table tbody td {
+  padding: 12px 13px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #edf0f4 !important;
+  color: #344054;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.accountant-items-table tbody tr:hover td {
+  background: #fafbfc;
+}
+
+.accountant-items-table tbody tr:last-child td {
+  border-bottom: 0 !important;
+}
+
+.accountant-items-table tfoot th {
+  padding: 13px !important;
+  border: 0 !important;
+  border-top: 2px solid #dfe4ec !important;
+  background: #f8fafc;
+  color: #101828;
+  font-size: 14px;
+}
+
+.accountant-items-table input[type="number"] {
+  width: 140px !important;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 8px 10px !important;
+  border: 1px solid #cfd6e2 !important;
+  border-radius: 7px !important;
+  background: #fff;
+  color: #101828;
+  outline: none;
+  font-size: 14px;
+}
+
+.accountant-details > button {
+  margin-top: 12px !important;
+  background: #182230 !important;
+  color: #fff !important;
+  border-color: #182230 !important;
+}
+
+.accountant-details > button:hover {
+  background: #101828 !important;
+}
+
+.accountant-summary-grid {
+  gap: 12px !important;
+}
+
+.accountant-summary-grid > div {
+  min-height: 78px;
+  box-sizing: border-box;
+  padding: 13px 15px;
+  background: #f8fafc;
+  border: 1px solid #e4e8ef;
+  border-radius: 10px;
+}
+
+.accountant-summary-grid strong {
+  display: block;
+  margin-bottom: 7px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.accountant-summary-grid > div > div {
+  color: #101828 !important;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+/* Error banner */
+.accountant-page > .accountant-container > div[style*="ffe7e7"] {
+  background: #fff1f1 !important;
+  border: 1px solid #f3b7b7 !important;
+  color: #b42318 !important;
+}
+
+/* Modal overlays */
+.accountant-page [style*="position: fixed"] {
+  backdrop-filter: blur(3px);
+  background: rgba(15, 23, 42, 0.52) !important;
+}
+
+.accountant-page [style*="position: fixed"] > div {
+  width: min(480px, 95vw) !important;
+  box-sizing: border-box;
+  padding: 26px !important;
+  border: 1px solid #e4e8ef;
+  border-radius: 14px !important;
+  background: #fff !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+.accountant-page [style*="position: fixed"] h2 {
+  margin: 0 0 8px;
+  color: #101828;
+  font-size: 22px;
+}
+
+.accountant-page [style*="position: fixed"] p {
+  color: #475467;
+}
+
+.accountant-page [style*="position: fixed"] label {
+  display: block;
+  margin-top: 16px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.accountant-page [style*="position: fixed"] input {
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 9px 11px !important;
+  border: 1px solid #cfd6e2 !important;
+  border-radius: 8px !important;
+  outline: none;
+}
+
+.accountant-page [style*="position: fixed"] button:last-child {
+  background: #182230 !important;
+  color: #fff !important;
+  border-color: #182230 !important;
+}
+
+@media (max-width: 800px) {
+  .accountant-page {
+    padding: 14px !important;
+  }
+
+  .accountant-header {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .accountant-header h1 {
+    font-size: 28px;
+  }
+
+  .accountant-toolbar {
+    padding: 12px;
+  }
+
+  .accountant-search {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .accountant-filter {
+    width: 100%;
+  }
+
+  .accountant-job-card {
+    padding: 16px !important;
+  }
+
+  .accountant-job-header {
+    flex-direction: column !important;
+  }
+}

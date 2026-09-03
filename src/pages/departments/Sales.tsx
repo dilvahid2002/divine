@@ -48,6 +48,414 @@ interface AcceptingOrder {
   username?: string
 }
 
+// =====================================================
+// PRINT HELPERS
+// Same A4 print workflow used by Live Production.
+// =====================================================
+
+const escapeHtml = (value: unknown): string => {
+  return String(value ?? '-')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+const printJobOrderA4 = (order: JobOrder) => {
+  const printWindow = window.open(
+    '',
+    '_blank',
+    'width=900,height=1000',
+  )
+
+  if (!printWindow) {
+    alert(
+      'Please allow pop-ups in your browser to print this job order.',
+    )
+    return
+  }
+
+  const rows = order.items
+    .map(
+      (item, index) => `
+        <tr>
+          <td>${escapeHtml(item.slNo ?? index + 1)}</td>
+          <td>${escapeHtml(item.name || '-')}</td>
+          <td>${escapeHtml(item.width || '-')}</td>
+          <td>${escapeHtml(item.height || '-')}</td>
+          <td>${escapeHtml(item.qty || '-')}</td>
+          <td>${escapeHtml(item.price || '-')}</td>
+          <td>${escapeHtml(item.remarks || '-')}</td>
+          <td>
+            ${
+              item.image
+                ? `<img class="item-image" src="${escapeHtml(item.image)}" />`
+                : '-'
+            }
+          </td>
+        </tr>
+      `,
+    )
+    .join('')
+
+  const jobRow = (
+    label: string,
+    selected: boolean,
+    assignment: string,
+    status: JobStatus,
+  ) => `
+    <tr>
+      <td><strong>${escapeHtml(label)}</strong></td>
+      <td>${selected ? 'Yes' : 'No'}</td>
+      <td>${escapeHtml(
+        selected ? assignment || 'Not assigned' : '-',
+      )}</td>
+      <td>${escapeHtml(selected ? status : '-')}</td>
+    </tr>
+  `
+
+  const office = order.officeInfo || ({} as JobOrder['officeInfo'])
+  const statuses = order.statuses || {
+    design: 'Pending' as JobStatus,
+    print: 'Pending' as JobStatus,
+    cutting: 'Pending' as JobStatus,
+    production: 'Pending' as JobStatus,
+  }
+
+  const productionStaff = Array.isArray(office.productionStaff)
+    ? office.productionStaff
+        .map((staff: any) => staff?.name || staff?.username || '')
+        .filter(Boolean)
+        .join(', ')
+    : ''
+
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <title>Job Order #${escapeHtml(order.orderId)}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111827;
+            margin: 0;
+            font-size: 11px;
+          }
+
+          .page {
+            width: 100%;
+          }
+
+          .header {
+            border-bottom: 2px solid #111827;
+            padding-bottom: 10px;
+            margin-bottom: 14px;
+          }
+
+          .title {
+            font-size: 22px;
+            font-weight: 800;
+            margin: 0 0 4px;
+          }
+
+          .subtitle {
+            font-size: 12px;
+            color: #4b5563;
+          }
+
+          .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 14px;
+          }
+
+          .box {
+            border: 1px solid #d1d5db;
+            border-radius: 5px;
+            padding: 8px;
+            min-height: 48px;
+          }
+
+          .label {
+            display: block;
+            font-size: 9px;
+            color: #6b7280;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+          }
+
+          .value {
+            font-weight: 700;
+          }
+
+          h2 {
+            font-size: 14px;
+            margin: 14px 0 7px;
+            border-bottom: 1px solid #d1d5db;
+            padding-bottom: 4px;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+          }
+
+          th,
+          td {
+            border: 1px solid #d1d5db;
+            padding: 5px;
+            vertical-align: top;
+          }
+
+          th {
+            background: #f3f4f6;
+            font-size: 9px;
+          }
+
+          td {
+            font-size: 10px;
+          }
+
+          .item-image {
+            width: 45px;
+            height: 45px;
+            object-fit: cover;
+            border-radius: 3px;
+          }
+
+          .footer {
+            margin-top: 15px;
+            padding-top: 8px;
+            border-top: 1px solid #d1d5db;
+            color: #6b7280;
+            font-size: 9px;
+          }
+
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="page">
+          <div class="header">
+            <div class="title">Job Order</div>
+            <div class="subtitle">Order #${escapeHtml(order.orderId)}</div>
+          </div>
+
+          <div class="grid">
+            <div class="box">
+              <span class="label">Order ID</span>
+              <span class="value">#${escapeHtml(order.orderId)}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Entry Date</span>
+              <span class="value">${escapeHtml(order.date || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Expected Delivery</span>
+              <span class="value">${escapeHtml(order.expectedDeliveryDate || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Branch</span>
+              <span class="value">${escapeHtml(order.branch || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Customer Adviser</span>
+              <span class="value">${escapeHtml(order.customerAdviser?.name || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Delivery Status</span>
+              <span class="value">${order.delivered ? 'Delivered' : 'Pending'}</span>
+            </div>
+          </div>
+
+          <h2>Customer Information</h2>
+
+          <div class="grid">
+            <div class="box">
+              <span class="label">Customer</span>
+              <span class="value">${escapeHtml(order.customer?.name || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Company</span>
+              <span class="value">${escapeHtml(order.customer?.companyName || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Phone</span>
+              <span class="value">${escapeHtml(order.customer?.phoneNumber || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">WhatsApp</span>
+              <span class="value">${escapeHtml(order.customer?.whatsappNumber || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Place</span>
+              <span class="value">${escapeHtml(order.customer?.place || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Accepting Order</span>
+              <span class="value">${escapeHtml(order.acceptingOrder?.name || order.acceptingOrder?.username || '-')}</span>
+            </div>
+          </div>
+
+          <h2>Job Assignments &amp; Status</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Selected</th>
+                <th>Assigned To / Branch</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${jobRow(
+                'Design',
+                Boolean(office.designJob),
+                office.designer || '',
+                statuses.design,
+              )}
+
+              ${jobRow(
+                'Printing',
+                Boolean(office.printJob),
+                office.printBranch || '',
+                statuses.print,
+              )}
+
+              ${jobRow(
+                'Cutting',
+                Boolean(office.cuttingJob),
+                office.cuttingBranch || office.cutting || '',
+                statuses.cutting || 'Pending',
+              )}
+
+              ${jobRow(
+                'Production',
+                Boolean(office.productionJob),
+                office.productionBranch || productionStaff || '',
+                statuses.production,
+              )}
+            </tbody>
+          </table>
+
+          <h2>Items</h2>
+
+          ${
+            order.items.length > 0
+              ? `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Item</th>
+                      <th>Width</th>
+                      <th>Height</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                      <th>Remarks</th>
+                      <th>Image</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rows}
+                  </tbody>
+                </table>
+              `
+              : '<p>No items.</p>'
+          }
+
+          <h2>Office Information</h2>
+
+          <div class="grid">
+            <div class="box">
+              <span class="label">Designer</span>
+              <span class="value">${escapeHtml(office.designer || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Printing Branch</span>
+              <span class="value">${escapeHtml(office.printBranch || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Cutting Branch</span>
+              <span class="value">${escapeHtml(office.cuttingBranch || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Cutting Staff</span>
+              <span class="value">${escapeHtml(office.cutting || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Production Branch</span>
+              <span class="value">${escapeHtml(office.productionBranch || '-')}</span>
+            </div>
+
+            <div class="box">
+              <span class="label">Production Staff</span>
+              <span class="value">${escapeHtml(productionStaff || '-')}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            Printed from Sales &nbsp; • &nbsp; ${escapeHtml(
+              new Date().toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            )}
+          </div>
+        </div>
+
+        <script>
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              window.print();
+            }, 700);
+          });
+        </script>
+      </body>
+    </html>
+  `
+
+  printWindow.document.open()
+  printWindow.document.write(html)
+  printWindow.document.close()
+}
+
 interface JobOrder {
   id: string
   orderId: number | string
@@ -1567,6 +1975,17 @@ function Sales({ user }: SalesProps) {
                       {isExpanded
                         ? 'Hide'
                         : 'View'}
+                    </button>
+
+                    {/* PRINT - same A4 print option as Live Production */}
+                    <button
+                      type="button"
+                      className="view-button"
+                      onClick={() =>
+                        printJobOrderA4(order)
+                      }
+                    >
+                      🖨 Print
                     </button>
 
                   </div>

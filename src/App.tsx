@@ -251,16 +251,16 @@ function App() {
         ========================================== */}
 
         <Route
-          path="/departments/accountant"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Accountant"
-            >
-              <Accountant />
-            </DepartmentRoute>
-          }
-        />
+  path="/departments/accountant"
+  element={
+    <DepartmentRoute
+      user={currentUser}
+      role="Accountant"
+    >
+      <Accountant user={currentUser} />
+    </DepartmentRoute>
+  }
+/>
 
         {/* =========================================
             MD
