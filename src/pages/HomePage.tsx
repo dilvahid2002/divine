@@ -37,7 +37,17 @@ interface DailyDutyRecord {
 
 interface DutySession {
   status: DutyStatus
+
+  /*
+   * IMPORTANT:
+   * dutyDate is the date the current/last duty
+   * session belongs to.
+   *
+   * It does NOT automatically change at midnight
+   * while the employee is still working.
+   */
   dutyDate: string
+
   branch: string
 
   currentSessionStartedAt?: Timestamp | null
@@ -99,6 +109,12 @@ const departmentPaths: Record<
     '/departments/live-production',
 }
 
+/*
+ * =========================================================
+ * DATE HELPERS
+ * =========================================================
+ */
+
 const getTodayDate = () => {
   const now = new Date()
 
@@ -115,21 +131,51 @@ const getTodayDate = () => {
   return `${year}-${month}-${day}`
 }
 
+/*
+ * =========================================================
+ * COMPONENT
+ * =========================================================
+ */
+
 function HomePage({
   user,
 }: HomePageProps) {
   const navigate = useNavigate()
 
+  /*
+   * =========================================================
+   * TODAY'S CALENDAR DATE
+   * =========================================================
+   */
+
   const [todayDate, setTodayDate] =
     useState(getTodayDate())
+
+  /*
+   * =========================================================
+   * DUTY STATE
+   * =========================================================
+   */
 
   const [duty, setDuty] =
     useState<DutySession>({
       status: 'Not Started',
+
       dutyDate: todayDate,
+
       branch: '',
+
+      currentSessionStartedAt:
+        null,
+
+      lastStartedAt: null,
+
+      lastEndedAt: null,
+
       totalWorkedSeconds: 0,
+
       totalSessions: 0,
+
       dailySessions: {},
     })
 
@@ -154,9 +200,11 @@ function HomePage({
     useState(false)
 
   /*
-   * =========================================
+   * =========================================================
    * FIRESTORE DUTY DOCUMENT
-   * =========================================
+   *
+   * duty_sessions/{username}
+   * =========================================================
    */
 
   const dutyRef = useMemo(
@@ -172,9 +220,16 @@ function HomePage({
   )
 
   /*
-   * =========================================
-   * KEEP DATE UPDATED
-   * =========================================
+   * =========================================================
+   * KEEP CALENDAR DATE UPDATED
+   *
+   * Checks once per minute.
+   *
+   * IMPORTANT:
+   * This only changes todayDate.
+   * It does NOT automatically end or reset
+   * an active duty session.
+   * =========================================================
    */
 
   useEffect(() => {
@@ -200,35 +255,78 @@ function HomePage({
   }, [])
 
   /*
-   * =========================================
-   * LOAD DUTY
-   * =========================================
+   * =========================================================
+   * LOAD DUTY FROM FIRESTORE
+   *
+   * IMPORTANT OVERNIGHT LOGIC:
+   *
+   * If:
+   *
+   * Monday 10 PM = started
+   * Tuesday 1 AM = still working
+   *
+   * Firestore still has:
+   *
+   * status = Working
+   * dutyDate = Monday
+   * currentSessionStartedAt = Monday 10 PM
+   *
+   * We therefore DO NOT require:
+   *
+   * dutyDate === todayDate
+   *
+   * to decide whether the employee is working.
+   * =========================================================
    */
 
   useEffect(() => {
     setDutyLoading(true)
+    setDutyMessage('')
 
     const unsubscribe =
       onSnapshot(
         dutyRef,
+
         (snapshot) => {
           const today = todayDate
+
+          /*
+           * =================================================
+           * NO FIRESTORE DOCUMENT
+           * =================================================
+           */
 
           if (!snapshot.exists()) {
             setDuty({
               status: 'Not Started',
+
               dutyDate: today,
+
               branch: '',
+
+              currentSessionStartedAt:
+                null,
+
+              lastStartedAt: null,
+
+              lastEndedAt: null,
+
               totalWorkedSeconds: 0,
+
               totalSessions: 0,
+
               dailySessions: {},
+
               userName: user.name,
+
               username:
                 user.username,
             })
 
             setSelectedBranch('')
+
             setShowBranchDropdown(false)
+
             setDutyLoading(false)
 
             return
@@ -237,6 +335,12 @@ function HomePage({
           const data =
             snapshot.data() as Partial<DutySession>
 
+          /*
+           * =================================================
+           * DAILY HISTORY
+           * =================================================
+           */
+
           const dailySessions =
             data.dailySessions &&
             typeof data.dailySessions ===
@@ -244,11 +348,74 @@ function HomePage({
               ? data.dailySessions
               : {}
 
+          /*
+           * =================================================
+           * DETERMINE WHETHER THERE IS AN ACTIVE SESSION
+           *
+           * DO NOT COMPARE dutyDate WITH today.
+           *
+           * This is what allows overnight duty.
+           * =================================================
+           */
+
+          const isWorking =
+            data.status === 'Working' &&
+            !!data.currentSessionStartedAt
+
+          /*
+           * =================================================
+           * ACTIVE DUTY DATE
+           *
+           * If employee is currently working, use the
+           * original dutyDate.
+           *
+           * Example:
+           *
+           * Monday 22:00
+           * dutyDate = Monday
+           *
+           * Tuesday 00:30
+           * dutyDate STILL = Monday
+           * =================================================
+           */
+
+          const activeDutyDate =
+            isWorking &&
+            data.dutyDate
+              ? data.dutyDate
+              : today
+
+          /*
+           * =================================================
+           * GET TODAY'S RECORD
+           * =================================================
+           */
+
           const todayRecord =
             dailySessions[today]
 
           /*
+           * =================================================
+           * GET ACTIVE DUTY RECORD
+           *
+           * During an overnight session this will point
+           * to Monday's record while today is Tuesday.
+           * =================================================
+           */
+
+          const activeRecord =
+            data.dutyDate
+              ? dailySessions[
+                  data.dutyDate
+                ]
+              : undefined
+
+          /*
+           * =================================================
            * BACKWARD COMPATIBILITY
+           *
+           * Supports the old single-day document format.
+           * =================================================
            */
 
           const legacyTodayRecord =
@@ -282,71 +449,276 @@ function HomePage({
                 }
               : undefined
 
-          const record =
-            todayRecord ||
-            legacyTodayRecord
-
           /*
-           * NO RECORD FOR TODAY
+           * =================================================
+           * OVERNIGHT LEGACY / ACTIVE RECORD
+           * =================================================
            */
 
-          if (!record) {
+          const legacyActiveRecord =
+            !activeRecord &&
+            isWorking &&
+            data.dutyDate
+              ? {
+                  date:
+                    data.dutyDate,
+
+                  startTime:
+                    data.lastStartedAt ||
+                    data.currentSessionStartedAt ||
+                    null,
+
+                  endTime: null,
+
+                  branch:
+                    data.branch || '',
+
+                  totalWorkedSeconds:
+                    Number(
+                      data.totalWorkedSeconds ||
+                        0,
+                    ),
+
+                  totalSessions:
+                    Number(
+                      data.totalSessions ||
+                        1,
+                    ),
+                }
+              : undefined
+
+          /*
+           * =================================================
+           * CHOOSE THE RECORD
+           *
+           * If working, prioritize the active duty record.
+           * Otherwise look for today's record.
+           * =================================================
+           */
+
+          const record =
+            isWorking
+              ? activeRecord ||
+                legacyActiveRecord
+              : todayRecord ||
+                legacyTodayRecord
+
+          /*
+           * =================================================
+           * ACTIVE WORKING DUTY
+           * =================================================
+           */
+
+          if (isWorking) {
+            const workingRecord =
+              record
+
+            /*
+             * Even if there is no dailySessions entry,
+             * the top-level Firestore data still tells us
+             * that the employee is actively working.
+             */
+
+            const branch =
+              workingRecord?.branch ||
+              data.branch ||
+              ''
+
+            const workedSeconds =
+              Number(
+                workingRecord?.totalWorkedSeconds ??
+                  data.totalWorkedSeconds ??
+                  0,
+              )
+
+            const totalSessions =
+              Number(
+                workingRecord?.totalSessions ??
+                  data.totalSessions ??
+                  1,
+              )
+
             setDuty({
-              status: 'Not Started',
-              dutyDate: today,
-              branch: '',
+              status: 'Working',
+
+              /*
+               * KEEP ORIGINAL DUTY DATE.
+               *
+               * This can be yesterday if the employee
+               * is working after midnight.
+               */
+              dutyDate:
+                data.dutyDate ||
+                today,
+
+              branch,
+
               currentSessionStartedAt:
+                data.currentSessionStartedAt ||
                 null,
-              lastStartedAt: null,
-              lastEndedAt: null,
-              totalWorkedSeconds: 0,
-              totalSessions: 0,
+
+              lastStartedAt:
+                workingRecord?.startTime ||
+                data.lastStartedAt ||
+                data.currentSessionStartedAt ||
+                null,
+
+              lastEndedAt:
+                data.lastEndedAt ||
+                null,
+
+              totalWorkedSeconds:
+                workedSeconds,
+
+              totalSessions:
+                totalSessions,
+
               dailySessions,
+
+              updatedAt:
+                data.updatedAt ||
+                null,
+
               userName:
                 data.userName ||
                 user.name,
+
               username:
                 data.username ||
                 user.username,
+            })
+
+            setSelectedBranch(branch)
+
+            /*
+             * IMPORTANT:
+             * Do NOT reset branch dropdown merely because
+             * the calendar date changed while working.
+             */
+
+            setDutyLoading(false)
+
+            return
+          }
+
+          /*
+           * =================================================
+           * NO ACTIVE SESSION
+           * =================================================
+           *
+           * Now we only care about TODAY.
+           *
+           * If there is no record for today, this is a new
+           * duty day and Start Duty becomes available.
+           * =================================================
+           */
+
+          if (!todayRecord && !legacyTodayRecord) {
+            setDuty({
+              status: 'Not Started',
+
+              dutyDate: today,
+
+              branch: '',
+
+              currentSessionStartedAt:
+                null,
+
+              lastStartedAt: null,
+
+              lastEndedAt: null,
+
+              totalWorkedSeconds: 0,
+
+              totalSessions: 0,
+
+              dailySessions,
+
+              userName:
+                data.userName ||
+                user.name,
+
+              username:
+                data.username ||
+                user.username,
+
               updatedAt:
                 data.updatedAt ||
                 null,
             })
 
             setSelectedBranch('')
+
             setShowBranchDropdown(false)
+
             setDutyLoading(false)
 
             return
           }
 
-          const recordTotalWorkedSeconds =
-            Number(
-              record.totalWorkedSeconds ||
-                0,
-            )
-
-          const recordTotalSessions =
-            Number(
-              record.totalSessions ||
-                0,
-            )
-
           /*
-           * ACTIVE WORKING SESSION
+           * =================================================
+           * TODAY HAS A RECORD
+           * =================================================
            */
 
-          const isWorking =
-            data.dutyDate === today &&
-            data.status === 'Working' &&
-            !!data.currentSessionStartedAt
+          const todayDuty =
+            todayRecord ||
+            legacyTodayRecord
+
+          if (!todayDuty) {
+            setDuty({
+              status: 'Not Started',
+
+              dutyDate: today,
+
+              branch: '',
+
+              currentSessionStartedAt:
+                null,
+
+              lastStartedAt: null,
+
+              lastEndedAt: null,
+
+              totalWorkedSeconds: 0,
+
+              totalSessions: 0,
+
+              dailySessions,
+            })
+
+            setSelectedBranch('')
+
+            setDutyLoading(false)
+
+            return
+          }
+
+          /*
+           * =================================================
+           * DETERMINE TODAY'S STATUS
+           * =================================================
+           */
 
           const status: DutyStatus =
-            isWorking
-              ? 'Working'
-              : record.endTime
-                ? 'Ended'
+            todayDuty.endTime
+              ? 'Ended'
+              : todayDuty.startTime
+                ? 'Not Started'
                 : 'Not Started'
+
+          /*
+           * =================================================
+           * IMPORTANT:
+           *
+           * A historical Ended record should not become
+           * the active status on a new date.
+           *
+           * We are already inside today's record here,
+           * so this is safe.
+           * =================================================
+           */
 
           setDuty({
             status,
@@ -354,28 +726,32 @@ function HomePage({
             dutyDate: today,
 
             branch:
-              record.branch || '',
+              todayDuty.branch || '',
 
             currentSessionStartedAt:
-              isWorking
-                ? data.currentSessionStartedAt
-                : null,
+              null,
 
             lastStartedAt:
-              record.startTime ||
+              todayDuty.startTime ||
               data.lastStartedAt ||
               null,
 
             lastEndedAt:
-              record.endTime ||
+              todayDuty.endTime ||
               data.lastEndedAt ||
               null,
 
             totalWorkedSeconds:
-              recordTotalWorkedSeconds,
+              Number(
+                todayDuty.totalWorkedSeconds ||
+                  0,
+              ),
 
             totalSessions:
-              recordTotalSessions,
+              Number(
+                todayDuty.totalSessions ||
+                  0,
+              ),
 
             dailySessions,
 
@@ -393,7 +769,7 @@ function HomePage({
           })
 
           setSelectedBranch(
-            record.branch || '',
+            todayDuty.branch || '',
           )
 
           setDutyLoading(false)
@@ -422,9 +798,57 @@ function HomePage({
   ])
 
   /*
-   * =========================================
+   * =========================================================
+   * LIVE TIMER
+   *
+   * This continues working after midnight.
+   *
+   * Example:
+   *
+   * Monday 23:59:59
+   * Tuesday 00:00:00
+   * Tuesday 01:00:00
+   *
+   * The timer keeps counting because it uses
+   * currentSessionStartedAt rather than today's date.
+   * =========================================================
+   */
+
+  useEffect(() => {
+    const intervalId =
+      window.setInterval(() => {
+        setDuty((current) => {
+          if (
+            current.status !==
+              'Working' ||
+            !current.currentSessionStartedAt
+          ) {
+            return current
+          }
+
+          /*
+           * Force a state refresh every second.
+           *
+           * The actual elapsed time is calculated from
+           * currentSessionStartedAt.
+           */
+          return {
+            ...current,
+          }
+        })
+      }, 1000)
+
+    return () => {
+      window.clearInterval(
+        intervalId,
+      )
+    }
+  }, [])
+
+  /*
+   * =========================================================
    * FORMAT TIME
-   * =========================================
+   * =========================================================
    */
 
   const formatDuration = (
@@ -432,7 +856,7 @@ function HomePage({
   ) => {
     const safe = Math.max(
       0,
-      Math.floor(seconds),
+      Math.floor(seconds || 0),
     )
 
     const hours = String(
@@ -453,9 +877,11 @@ function HomePage({
   }
 
   /*
-   * =========================================
+   * =========================================================
    * CURRENT WORKED TIME
-   * =========================================
+   *
+   * Works across midnight.
+   * =========================================================
    */
 
   const currentWorkedSeconds = () => {
@@ -468,8 +894,7 @@ function HomePage({
       duty.status === 'Working' &&
       duty.currentSessionStartedAt
     ) {
-      return (
-        stored +
+      const runningSeconds =
         Math.max(
           0,
           Math.floor(
@@ -479,6 +904,10 @@ function HomePage({
             ) / 1000,
           ),
         )
+
+      return (
+        stored +
+        runningSeconds
       )
     }
 
@@ -486,9 +915,9 @@ function HomePage({
   }
 
   /*
-   * =========================================
+   * =========================================================
    * START DUTY
-   * =========================================
+   * =========================================================
    */
 
   const handleStartDuty =
@@ -498,22 +927,36 @@ function HomePage({
       const today =
         getTodayDate()
 
+      /*
+       * NEVER allow Start Duty while an active session
+       * exists, even if that session started yesterday.
+       */
       if (
         duty.status === 'Working'
       ) {
-        return
-      }
-
-      if (
-        duty.status === 'Ended'
-      ) {
         setDutyMessage(
-          "Today's duty already has an end time. Use 'Resume Duty' to continue today's duty.",
+          'You already have an active duty session.',
         )
 
         return
       }
 
+      /*
+       * Ended today's duty can only be resumed.
+       */
+      if (
+        duty.status === 'Ended'
+      ) {
+        setDutyMessage(
+          "Today's duty has already ended. Use 'Resume Duty' to continue today's duty.",
+        )
+
+        return
+      }
+
+      /*
+       * Branch required.
+       */
       if (!selectedBranch) {
         setShowBranchDropdown(true)
 
@@ -535,7 +978,9 @@ function HomePage({
           duty.dailySessions || {}
 
         /*
-         * DO NOT OVERWRITE EXISTING DAY
+         * =================================================
+         * DO NOT OVERWRITE TODAY'S RECORD
+         * =================================================
          */
 
         if (
@@ -553,23 +998,40 @@ function HomePage({
         const dailyRecord: DailyDutyRecord =
           {
             date: today,
+
             startTime: now,
+
             endTime: null,
-            branch: selectedBranch,
+
+            branch:
+              selectedBranch,
+
             totalWorkedSeconds: 0,
+
             totalSessions: 1,
           }
 
         const dailySessions = {
           ...existingDailySessions,
-          [today]: dailyRecord,
+
+          [today]:
+            dailyRecord,
         }
+
+        /*
+         * =================================================
+         * WRITE NEW DUTY
+         * =================================================
+         */
 
         await setDoc(
           dutyRef,
           {
             status: 'Working',
 
+            /*
+             * This is the date the duty was started.
+             */
             dutyDate: today,
 
             branch:
@@ -620,9 +1082,28 @@ function HomePage({
     }
 
   /*
-   * =========================================
+   * =========================================================
    * END DUTY
-   * =========================================
+   *
+   * IMPORTANT OVERNIGHT FIX:
+   *
+   * We DO NOT use getTodayDate() as the dailySessions key.
+   *
+   * Instead we use duty.dutyDate.
+   *
+   * Example:
+   *
+   * Started Monday 22:00
+   * Ended Tuesday 01:00
+   *
+   * The record updated is:
+   *
+   * dailySessions["Monday"]
+   *
+   * NOT:
+   *
+   * dailySessions["Tuesday"]
+   * =========================================================
    */
 
   const handleEndDuty =
@@ -634,8 +1115,21 @@ function HomePage({
         return
       }
 
-      const today =
-        getTodayDate()
+      /*
+       * IMPORTANT:
+       * This is the original date on which the duty
+       * was started.
+       */
+      const dutyDate =
+        duty.dutyDate
+
+      if (!dutyDate) {
+        setDutyMessage(
+          'Duty date could not be determined. Please refresh and try again.',
+        )
+
+        return
+      }
 
       setDutyBusy(true)
       setDutyMessage('')
@@ -644,10 +1138,87 @@ function HomePage({
         const now =
           Timestamp.now()
 
+        /*
+         * =================================================
+         * FIND THE ORIGINAL DUTY RECORD
+         * =================================================
+         */
+
+        const existingDailySessions =
+          duty.dailySessions || {}
+
+        const currentRecord =
+          existingDailySessions[
+            dutyDate
+          ]
+
+        /*
+         * =================================================
+         * FALLBACK
+         *
+         * In case an older document doesn't contain the
+         * dailySessions entry, we can still construct it
+         * from the top-level data.
+         * =================================================
+         */
+
+        const fallbackRecord: DailyDutyRecord =
+          {
+            date: dutyDate,
+
+            startTime:
+              duty.lastStartedAt ||
+              duty.currentSessionStartedAt ||
+              now,
+
+            endTime: null,
+
+            branch:
+              duty.branch ||
+              selectedBranch ||
+              '',
+
+            totalWorkedSeconds:
+              Number(
+                duty.totalWorkedSeconds ||
+                  0,
+              ),
+
+            totalSessions:
+              Number(
+                duty.totalSessions ||
+                  1,
+              ),
+          }
+
+        const record =
+          currentRecord ||
+          fallbackRecord
+
+        /*
+         * =================================================
+         * CURRENT SESSION START
+         * =================================================
+         */
+
         const started =
           duty.currentSessionStartedAt
             ?.toMillis() ??
+          record.startTime?.toMillis() ??
           now.toMillis()
+
+        /*
+         * =================================================
+         * CURRENT SESSION DURATION
+         *
+         * This works even if:
+         *
+         * started = Monday 22:00
+         * now     = Tuesday 01:00
+         *
+         * Difference = 3 hours
+         * =================================================
+         */
 
         const sessionSeconds =
           Math.max(
@@ -660,68 +1231,114 @@ function HomePage({
             ),
           )
 
+        /*
+         * =================================================
+         * PREVIOUSLY COMPLETED WORK
+         * =================================================
+         */
+
         const previousWorkedSeconds =
           Number(
-            duty.totalWorkedSeconds ||
+            record.totalWorkedSeconds ||
+              duty.totalWorkedSeconds ||
               0,
           )
+
+        /*
+         * =================================================
+         * NEW TOTAL
+         * =================================================
+         */
 
         const newTotalWorkedSeconds =
           previousWorkedSeconds +
           sessionSeconds
 
-        const existingDailySessions =
-          duty.dailySessions || {}
+        /*
+         * =================================================
+         * SESSION COUNT
+         * =================================================
+         */
 
-        const currentRecord =
-          existingDailySessions[
-            today
-          ]
-
-        if (!currentRecord) {
-          setDutyMessage(
-            "Today's duty record was not found. Please refresh and try again.",
+        const existingSessions =
+          Number(
+            record.totalSessions ||
+              duty.totalSessions ||
+              1,
           )
 
-          return
-        }
+        /*
+         * =================================================
+         * UPDATE ORIGINAL DAY RECORD
+         * =================================================
+         */
 
         const updatedDailyRecord: DailyDutyRecord =
           {
-            ...currentRecord,
+            ...record,
 
-            date: today,
+            date: dutyDate,
 
             branch:
-              currentRecord.branch ||
+              record.branch ||
               duty.branch ||
-              selectedBranch,
+              selectedBranch ||
+              '',
 
+            /*
+             * Keep original first start time.
+             */
+            startTime:
+              record.startTime ||
+              duty.lastStartedAt ||
+              duty.currentSessionStartedAt ||
+              null,
+
+            /*
+             * End timestamp can be on the NEXT day.
+             */
             endTime: now,
 
             totalWorkedSeconds:
               newTotalWorkedSeconds,
 
             totalSessions:
-              Number(
-                currentRecord.totalSessions ||
-                  duty.totalSessions ||
-                  1,
-              ),
+              existingSessions,
           }
 
         const dailySessions = {
           ...existingDailySessions,
-          [today]:
+
+          /*
+           * CRITICAL:
+           *
+           * Use dutyDate, not today.
+           */
+          [dutyDate]:
             updatedDailyRecord,
         }
+
+        /*
+         * =================================================
+         * SAVE
+         * =================================================
+         */
 
         await setDoc(
           dutyRef,
           {
+            /*
+             * Duty is now ended.
+             */
             status: 'Ended',
 
-            dutyDate: today,
+            /*
+             * Keep the original duty date.
+             *
+             * This allows the attendance record to remain
+             * attached to the day the duty started.
+             */
+            dutyDate,
 
             branch:
               updatedDailyRecord.branch,
@@ -729,7 +1346,11 @@ function HomePage({
             currentSessionStartedAt:
               null,
 
-            lastEndedAt: now,
+            lastStartedAt:
+              updatedDailyRecord.startTime,
+
+            lastEndedAt:
+              now,
 
             totalWorkedSeconds:
               newTotalWorkedSeconds,
@@ -751,10 +1372,16 @@ function HomePage({
           },
         )
 
+        /*
+         * =================================================
+         * MESSAGE
+         * =================================================
+         */
+
         setDutyMessage(
-          `Duty ended. Today's total worked time: ${formatDuration(
+          `Duty ended. Total worked time for ${dutyDate}: ${formatDuration(
             newTotalWorkedSeconds,
-          )}. You can resume today's duty if needed.`,
+          )}.`,
         )
       } catch (error) {
         console.error(
@@ -771,9 +1398,29 @@ function HomePage({
     }
 
   /*
-   * =========================================
+   * =========================================================
    * RESUME DUTY
-   * =========================================
+   * =========================================================
+   *
+   * Resume is allowed only when:
+   *
+   * 1. Today's duty has ended
+   * 2. dutyDate === today's date
+   *
+   * Therefore:
+   *
+   * Monday 10 PM → Tuesday 1 AM
+   *
+   * After ending at Tuesday 1 AM:
+   *
+   * Monday record = Ended
+   * Tuesday = new day
+   *
+   * Resume will NOT appear as an active option for
+   * Monday's session.
+   *
+   * Tuesday can start a fresh duty.
+   * =========================================================
    */
 
   const handleResumeDuty =
@@ -788,11 +1435,15 @@ function HomePage({
       const today =
         getTodayDate()
 
+      /*
+       * Resume only today's ended duty.
+       */
+
       if (
         duty.dutyDate !== today
       ) {
         setDutyMessage(
-          "Resume is only available for today's duty. Please start today's duty.",
+          "The previous duty belongs to an earlier date. Please start today's duty.",
         )
 
         return
@@ -810,6 +1461,10 @@ function HomePage({
 
         return
       }
+
+      /*
+       * Branch should normally already exist.
+       */
 
       if (
         !currentRecord.branch &&
@@ -831,6 +1486,32 @@ function HomePage({
         const now =
           Timestamp.now()
 
+        /*
+         * =================================================
+         * PRESERVE PREVIOUSLY COMPLETED TIME
+         * =================================================
+         */
+
+        const previousWorkedSeconds =
+          Number(
+            currentRecord.totalWorkedSeconds ||
+              duty.totalWorkedSeconds ||
+              0,
+          )
+
+        /*
+         * =================================================
+         * INCREMENT SESSION COUNT
+         * =================================================
+         */
+
+        const previousSessions =
+          Number(
+            currentRecord.totalSessions ||
+              duty.totalSessions ||
+              0,
+          )
+
         const dailyRecord: DailyDutyRecord =
           {
             ...currentRecord,
@@ -844,29 +1525,32 @@ function HomePage({
               currentRecord.branch ||
               selectedBranch,
 
+            /*
+             * Clear previous end because the new session
+             * is active.
+             */
             endTime: null,
 
             totalWorkedSeconds:
-              Number(
-                currentRecord.totalWorkedSeconds ||
-                  duty.totalWorkedSeconds ||
-                  0,
-              ),
+              previousWorkedSeconds,
 
             totalSessions:
-              Number(
-                currentRecord.totalSessions ||
-                  duty.totalSessions ||
-                  0,
-              ) + 1,
+              previousSessions + 1,
           }
 
         const dailySessions = {
           ...(duty.dailySessions ||
             {}),
+
           [today]:
             dailyRecord,
         }
+
+        /*
+         * =================================================
+         * SAVE RESUMED DUTY
+         * =================================================
+         */
 
         await setDoc(
           dutyRef,
@@ -883,8 +1567,16 @@ function HomePage({
 
             lastStartedAt: now,
 
+            /*
+             * Previous session end time is no longer the
+             * active end time.
+             */
+            lastEndedAt:
+              currentRecord.endTime ||
+              null,
+
             totalWorkedSeconds:
-              dailyRecord.totalWorkedSeconds,
+              previousWorkedSeconds,
 
             totalSessions:
               dailyRecord.totalSessions,
@@ -921,18 +1613,18 @@ function HomePage({
     }
 
   /*
-   * =========================================
+   * =========================================================
    * DUTY ACTIVE
-   * =========================================
+   * =========================================================
    */
 
   const dutyActive =
     duty.status === 'Working'
 
   /*
-   * =========================================
+   * =========================================================
    * ROLE CHECK
-   * =========================================
+   * =========================================================
    */
 
   const hasRole = (
@@ -950,9 +1642,9 @@ function HomePage({
   }
 
   /*
-   * =========================================
+   * =========================================================
    * DEPARTMENT NAVIGATION
-   * =========================================
+   * =========================================================
    */
 
   const handleDepartmentClick =
@@ -978,9 +1670,9 @@ function HomePage({
     }
 
   /*
-   * =========================================
+   * =========================================================
    * SALES STATISTICS
-   * =========================================
+   * =========================================================
    */
 
   const handleSalesStatisticsClick =
@@ -999,9 +1691,9 @@ function HomePage({
     }
 
   /*
-   * =========================================
+   * =========================================================
    * MY ATTENDANCE
-   * =========================================
+   * =========================================================
    */
 
   const handleMyAttendanceClick =
@@ -1010,9 +1702,9 @@ function HomePage({
     }
 
   /*
-   * =========================================
+   * =========================================================
    * LOGOUT
-   * =========================================
+   * =========================================================
    */
 
   const handleLogout = () => {
@@ -1022,9 +1714,9 @@ function HomePage({
   }
 
   /*
-   * =========================================
+   * =========================================================
    * DEPARTMENT ACTIVE
-   * =========================================
+   * =========================================================
    */
 
   const isDepartmentActive = (
@@ -1037,15 +1729,35 @@ function HomePage({
   }
 
   /*
-   * =========================================
+   * =========================================================
+   * DISPLAY DUTY DATE
+   *
+   * During overnight duty this may show yesterday's date.
+   *
+   * Example:
+   *
+   * Today = Tuesday
+   * Duty date = Monday
+   *
+   * That is intentional.
+   * =========================================================
+   */
+
+  const displayDutyDate =
+    duty.dutyDate || todayDate
+
+  /*
+   * =========================================================
    * PAGE
-   * =========================================
+   * =========================================================
    */
 
   return (
     <div className="home-page">
 
-      {/* HEADER */}
+      {/* ===================================================
+          HEADER
+          =================================================== */}
 
       <header className="home-header">
 
@@ -1062,7 +1774,9 @@ function HomePage({
           </p>
         </div>
 
-        {/* DUTY CONTROL */}
+        {/* =================================================
+            DUTY CONTROL
+            ================================================= */}
 
         <div
           className={`duty-control ${duty.status
@@ -1072,6 +1786,7 @@ function HomePage({
               '-',
             )}`}
         >
+
           <div className="duty-control-info">
 
             <span className="duty-label">
@@ -1088,8 +1803,7 @@ function HomePage({
               <>
                 <span className="duty-time">
                   Date{' '}
-                  {duty.dutyDate ||
-                    todayDate}
+                  {displayDutyDate}
                 </span>
 
                 <span className="duty-time">
@@ -1106,12 +1820,18 @@ function HomePage({
                 </span>
               </>
             )}
+
           </div>
 
           <div className="duty-buttons">
 
+            {/* =============================================
+                WORKING
+                ============================================= */}
+
             {duty.status ===
             'Working' ? (
+
               <button
                 type="button"
                 className="duty-button end-duty-button"
@@ -1127,9 +1847,15 @@ function HomePage({
                   ? 'Updating...'
                   : 'End Duty'}
               </button>
+
             ) : duty.status ===
               'Not Started' ? (
+
               <>
+                {/* =========================================
+                    START DUTY
+                    ========================================= */}
+
                 <button
                   type="button"
                   className="duty-button start-duty-button"
@@ -1149,7 +1875,9 @@ function HomePage({
                 </button>
 
                 {showBranchDropdown && (
+
                   <div>
+
                     <label htmlFor="duty-branch">
                       Branch
                     </label>
@@ -1171,6 +1899,7 @@ function HomePage({
                         dutyBusy
                       }
                     >
+
                       <option value="">
                         Select Branch
                       </option>
@@ -1187,6 +1916,7 @@ function HomePage({
                           </option>
                         ),
                       )}
+
                     </select>
 
                     <button
@@ -1205,12 +1935,17 @@ function HomePage({
                         ? 'Updating...'
                         : 'Confirm Start'}
                     </button>
+
                   </div>
                 )}
+
               </>
+
             ) : null}
 
-            {/* RESUME */}
+            {/* =============================================
+                RESUME DUTY
+                ============================================= */}
 
             <button
               type="button"
@@ -1235,9 +1970,12 @@ function HomePage({
             </button>
 
           </div>
+
         </div>
 
-        {/* DUTY MESSAGE */}
+        {/* =================================================
+            DUTY MESSAGE
+            ================================================= */}
 
         {dutyMessage && (
           <div
@@ -1248,7 +1986,9 @@ function HomePage({
           </div>
         )}
 
-        {/* USER MENU */}
+        {/* =================================================
+            USER MENU
+            ================================================= */}
 
         <div className="user-menu-container">
 
@@ -1261,6 +2001,7 @@ function HomePage({
               )
             }
           >
+
             <span>
               {user.name}
             </span>
@@ -1270,12 +2011,16 @@ function HomePage({
                 ? '▲'
                 : '▼'}
             </span>
+
           </button>
 
           {showUserMenu && (
+
             <div className="user-dropdown">
 
-              {/* MY ATTENDANCE */}
+              {/* =========================================
+                  MY ATTENDANCE
+                  ========================================= */}
 
               <button
                 type="button"
@@ -1287,7 +2032,9 @@ function HomePage({
                 My Attendance
               </button>
 
-              {/* LOGOUT */}
+              {/* =========================================
+                  LOGOUT
+                  ========================================= */}
 
               <button
                 type="button"
@@ -1296,6 +2043,7 @@ function HomePage({
                   handleLogout
                 }
               >
+
                 <span className="logout-icon">
                   ↪
                 </span>
@@ -1303,16 +2051,20 @@ function HomePage({
                 <span>
                   Logout
                 </span>
+
               </button>
 
             </div>
+
           )}
 
         </div>
 
       </header>
 
-      {/* MAIN CONTENT */}
+      {/* ===================================================
+          MAIN CONTENT
+          =================================================== */}
 
       <main className="home-content">
 
@@ -1333,10 +2085,13 @@ function HomePage({
 
         </div>
 
-        {/* DUTY REQUIRED */}
+        {/* =================================================
+            DUTY REQUIRED
+            ================================================= */}
 
         {!dutyActive &&
           !dutyLoading && (
+
             <div className="duty-required-banner">
 
               <strong>
@@ -1351,13 +2106,18 @@ function HomePage({
               </span>
 
             </div>
+
           )}
 
-        {/* DEPARTMENT GRID */}
+        {/* =================================================
+            DEPARTMENT GRID
+            ================================================= */}
 
         <div className="department-grid">
 
-          {/* SALES */}
+          {/* =================================================
+              SALES
+              ================================================= */}
 
           {(() => {
             const role = 'Sales'
@@ -1368,6 +2128,7 @@ function HomePage({
               )
 
             return (
+
               <button
                 key={role}
                 type="button"
@@ -1385,6 +2146,7 @@ function HomePage({
                   )
                 }
               >
+
                 <div className="department-icon">
                   {role.charAt(0)}
                 </div>
@@ -1400,11 +2162,15 @@ function HomePage({
                       ? 'Duty Required'
                       : 'No Access'}
                 </div>
+
               </button>
+
             )
           })()}
 
-          {/* SALES STATISTICS */}
+          {/* =================================================
+              SALES STATISTICS
+              ================================================= */}
 
           <button
             type="button"
@@ -1420,6 +2186,7 @@ function HomePage({
               handleSalesStatisticsClick
             }
           >
+
             <div className="department-icon">
               S
             </div>
@@ -1433,9 +2200,12 @@ function HomePage({
                 ? 'Available'
                 : 'Duty Required'}
             </div>
+
           </button>
 
-          {/* LIVE PRODUCTION */}
+          {/* =================================================
+              LIVE PRODUCTION
+              ================================================= */}
 
           {(() => {
             const role =
@@ -1447,6 +2217,7 @@ function HomePage({
               )
 
             return (
+
               <button
                 key={role}
                 type="button"
@@ -1464,6 +2235,7 @@ function HomePage({
                   )
                 }
               >
+
                 <div className="department-icon">
                   {role.charAt(0)}
                 </div>
@@ -1479,24 +2251,30 @@ function HomePage({
                       ? 'Duty Required'
                       : 'No Access'}
                 </div>
+
               </button>
+
             )
           })()}
 
-          {/* OTHER DEPARTMENTS */}
+          {/* =================================================
+              OTHER DEPARTMENTS
+              ================================================= */}
 
           {availableRoles
             .filter(
               (role) =>
                 role !== 'Sales',
-              )
+            )
             .map((role) => {
+
               const isActive =
                 isDepartmentActive(
                   role,
                 )
 
               return (
+
                 <button
                   key={role}
                   type="button"
@@ -1514,6 +2292,7 @@ function HomePage({
                     )
                   }
                 >
+
                   <div className="department-icon">
                     {role.charAt(0)}
                   </div>
@@ -1529,7 +2308,9 @@ function HomePage({
                         ? 'Duty Required'
                         : 'No Access'}
                   </div>
+
                 </button>
+
               )
             })}
 
