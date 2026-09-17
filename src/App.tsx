@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
+
 import {
   BrowserRouter,
   Routes,
@@ -9,6 +11,9 @@ import {
 import LoginPage from './pages/LoginPage'
 import UserManager from './pages/UserManager'
 import HomePage from './pages/HomePage'
+
+import Attendance from './pages/attendance'
+import MyAttendance from './pages/my-attandance'
 
 import JobOrder from './pages/departments/JobOrder'
 import Sales from './pages/departments/Sales'
@@ -37,7 +42,7 @@ interface User {
 interface DepartmentRouteProps {
   user: User
   role: string
-  children: React.ReactNode
+  children: ReactNode
 }
 
 function DepartmentRoute({
@@ -52,34 +57,52 @@ function DepartmentRoute({
   )
 
   if (!hasAccess) {
-    return <Navigate to="/" replace />
+    return (
+      <Navigate
+        to="/"
+        replace
+      />
+    )
   }
 
   return <>{children}</>
 }
-
 
 function App() {
   const [currentUser, setCurrentUser] =
     useState<User | null>(null)
 
   /*
-   * Called after successful login.
+   * =========================================
+   * LOGIN
+   * =========================================
    */
+
   const handleLogin = (user: User) => {
     setCurrentUser(user)
   }
 
   /*
-   * User is not logged in.
+   * =========================================
+   * USER NOT LOGGED IN
+   * =========================================
    */
+
   if (!currentUser) {
     return (
       <BrowserRouter>
-        <LoginPage onLogin={handleLogin} />
+        <LoginPage
+          onLogin={handleLogin}
+        />
       </BrowserRouter>
     )
   }
+
+  /*
+   * =========================================
+   * APPLICATION ROUTES
+   * =========================================
+   */
 
   return (
     <BrowserRouter>
@@ -92,12 +115,52 @@ function App() {
         <Route
           path="/"
           element={
-            currentUser.username === 'admin' &&
-            currentUser.password === 'admin' ? (
+            currentUser.username ===
+              'admin' &&
+            currentUser.password ===
+              'admin' ? (
               <UserManager />
             ) : (
-              <HomePage user={currentUser} />
+              <HomePage
+                user={currentUser}
+              />
             )
+          }
+        />
+
+        {/* =========================================
+            ATTENDANCE - MANAGER / GENERAL
+        ========================================== */}
+
+        <Route
+          path="/attendance"
+          element={
+            <Attendance />
+          }
+        />
+
+        {/* =========================================
+            OLD ATTENDANCE URL
+            Kept for compatibility
+        ========================================== */}
+
+        <Route
+          path="/attandance"
+          element={
+            <Attendance />
+          }
+        />
+
+        {/* =========================================
+            MY ATTENDANCE
+        ========================================== */}
+
+        <Route
+          path="/my-attandance"
+          element={
+            <MyAttendance
+              user={currentUser}
+            />
           }
         />
 
@@ -106,9 +169,9 @@ function App() {
         ========================================== */}
 
         <Route
-          path="/departments/job-order"
+          path="/job-order"
           element={
-            <JobOrder user={currentUser} />
+            <JobOrder />
           }
         />
 
@@ -123,7 +186,9 @@ function App() {
               user={currentUser}
               role="Sales"
             >
-              <Sales user={currentUser} />
+              <Sales
+                user={currentUser}
+              />
             </DepartmentRoute>
           }
         />
@@ -148,7 +213,9 @@ function App() {
         <Route
           path="/departments/cutting"
           element={
-            <Cutting user={currentUser} />
+            <Cutting
+              user={currentUser}
+            />
           }
         />
 
@@ -159,7 +226,9 @@ function App() {
         <Route
           path="/departments/measurement"
           element={
-            <Measurement user={currentUser} />
+            <Measurement
+              user={currentUser}
+            />
           }
         />
 
@@ -174,29 +243,30 @@ function App() {
               user={currentUser}
               role="Designer"
             >
-              <Designer user={currentUser} />
+              <Designer
+                user={currentUser}
+              />
             </DepartmentRoute>
           }
         />
 
+        {/* =========================================
+            PRINTER
+        ========================================== */}
 
-{/* =========================================
-    PRINTER
-========================================= */}
-
-<Route
-  path="/departments/printer"
-  element={
-    <DepartmentRoute
-      user={currentUser}
-      role="Printer"
-    >
-      <Printer user={currentUser} />
-    </DepartmentRoute>
-  }
-/>
-
-
+        <Route
+          path="/departments/printer"
+          element={
+            <DepartmentRoute
+              user={currentUser}
+              role="Printer"
+            >
+              <Printer
+                user={currentUser}
+              />
+            </DepartmentRoute>
+          }
+        />
 
         {/* =========================================
             PRODUCTION
@@ -209,7 +279,9 @@ function App() {
               user={currentUser}
               role="Production"
             >
-              <Production user={currentUser} />
+              <Production
+                user={currentUser}
+              />
             </DepartmentRoute>
           }
         />
@@ -251,16 +323,18 @@ function App() {
         ========================================== */}
 
         <Route
-  path="/departments/accountant"
-  element={
-    <DepartmentRoute
-      user={currentUser}
-      role="Accountant"
-    >
-      <Accountant user={currentUser} />
-    </DepartmentRoute>
-  }
-/>
+          path="/departments/accountant"
+          element={
+            <DepartmentRoute
+              user={currentUser}
+              role="Accountant"
+            >
+              <Accountant
+                user={currentUser}
+              />
+            </DepartmentRoute>
+          }
+        />
 
         {/* =========================================
             MD
@@ -293,21 +367,24 @@ function App() {
             </DepartmentRoute>
           }
         />
-        {/* =========================================
-    LIVE PRODUCTION
-========================================= */}
 
-<Route
-  path="/departments/live-production"
-  element={
-    <DepartmentRoute
-      user={currentUser}
-      role="Live Production"
-    >
-      <LiveProduction user={currentUser} />
-    </DepartmentRoute>
-  }
-/>
+        {/* =========================================
+            LIVE PRODUCTION
+        ========================================== */}
+
+        <Route
+          path="/departments/live-production"
+          element={
+            <DepartmentRoute
+              user={currentUser}
+              role="Live Production"
+            >
+              <LiveProduction
+                user={currentUser}
+              />
+            </DepartmentRoute>
+          }
+        />
 
         {/* =========================================
             UNKNOWN URL
@@ -316,7 +393,10 @@ function App() {
         <Route
           path="*"
           element={
-            <Navigate to="/" replace />
+            <Navigate
+              to="/"
+              replace
+            />
           }
         />
 

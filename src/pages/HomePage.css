@@ -138,3 +138,446 @@
     padding: 30px 20px;
   }
 }
+.duty-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  margin-right: 18px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid #d9dee8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(16,24,40,.06);
+}
+.duty-control-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 105px;
+  line-height: 1.15;
+}
+.duty-label {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.duty-status {
+  margin-top: 3px;
+  color: #101828;
+  font-size: 14px;
+}
+.duty-time {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.duty-button {
+  min-width: 112px;
+  min-height: 40px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.duty-button.not-started { background: #175cd3; }
+.duty-button.working { background: #b42318; }
+.duty-button.ended { background: #344054; }
+.duty-button:disabled { opacity: .65; cursor: not-allowed; }
+.duty-control.working { border-color: #b7ebc6; background: #f6fff8; }
+.duty-control.ended { border-color: #d0d5dd; background: #f9fafb; }
+.duty-control.not-started { border-color: #b2ccff; background: #f8faff; }
+.duty-message {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 18px;
+  z-index: 20;
+  max-width: 390px;
+  padding: 9px 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #344054;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 8px 22px rgba(16,24,40,.12);
+}
+.duty-required-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 12px 15px;
+  border: 1px solid #f2c6c6;
+  border-radius: 10px;
+  background: #fff7f7;
+  color: #7a271a;
+  font-size: 13px;
+}
+.duty-required-banner strong { font-weight: 800; }
+.department-card.disabled {
+  opacity: .48;
+  filter: grayscale(.25);
+  cursor: not-allowed;
+}
+@media (max-width: 900px) {
+  .home-header { flex-wrap: wrap; gap: 12px; }
+  .duty-control {
+    order: 3;
+    width: 100%;
+    margin: 0;
+    justify-content: space-between;
+  }
+  .duty-message { right: 10px; left: 10px; max-width: none; }
+}
+@media (max-width: 520px) {
+  .duty-control {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .duty-button { width: 100%; }
+  .duty-required-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+/* =========================================
+   DUTY BUTTONS
+========================================= */
+
+.duty-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Common button style */
+.duty-button {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  min-width: 120px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* =========================================
+   START DUTY
+   New day of duty
+========================================= */
+
+.start-duty-button {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.start-duty-button:hover:not(:disabled) {
+  background: #15803d;
+  transform: translateY(-1px);
+}
+
+/* =========================================
+   END DUTY
+========================================= */
+
+.end-duty-button {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.end-duty-button:hover:not(:disabled) {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+/* =========================================
+   RESUME DUTY
+   Continue today's duty
+========================================= */
+
+.resume-duty-button {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.resume-duty-button:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+/* =========================================
+   DISABLED RESUME
+========================================= */
+
+.duty-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 600px) {
+  .duty-buttons {
+    flex-wrap: wrap;
+  }
+
+  .duty-button {
+    min-width: 110px;
+    padding: 9px 14px;
+  }
+}
+.branch-selection {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 18px;
+  z-index: 30;
+
+  width: 260px;
+  padding: 14px;
+
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.12);
+}
+
+.branch-selection label {
+  display: block;
+  margin-bottom: 6px;
+
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.branch-selection select {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+
+  border: 1px solid #d0d5dd;
+  border-radius: 7px;
+
+  background: #fff;
+  color: #101828;
+
+  font-size: 13px;
+  outline: none;
+}
+
+.branch-selection select:focus {
+  border-color: #175cd3;
+}
+
+.confirm-start-duty-button {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 10px;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: #175cd3;
+  color: #fff;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.confirm-start-duty-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .branch-selection {
+    position: static;
+    width: auto;
+    margin-top: 8px;
+  }
+}
+/* =========================================
+   BRANCH SELECTION
+========================================= */
+
+.branch-selection {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 18px;
+  z-index: 25;
+
+  width: 260px;
+  padding: 14px;
+
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+
+  background: #fff;
+
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.12);
+}
+
+.branch-selection label {
+  display: block;
+  margin-bottom: 6px;
+
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.branch-selection select {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+
+  background: #fff;
+  color: #101828;
+
+  font-size: 13px;
+  outline: none;
+}
+
+.branch-selection select:focus {
+  border-color: #175cd3;
+}
+
+.confirm-start-duty-button {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 10px;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: #175cd3;
+  color: #fff;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.confirm-start-duty-button:hover:not(:disabled) {
+  background: #124db2;
+}
+
+.confirm-start-duty-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Mobile */
+
+@media (max-width: 520px) {
+  .branch-selection {
+    position: static;
+    width: 100%;
+    margin-top: 10px;
+  }
+}.duty-buttons select {
+  height: 38px;
+  min-width: 180px;
+  padding: 0 32px 0 12px;
+
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+
+  background: #fff;
+  color: #344054;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+  outline: none;
+}
+
+.duty-buttons select:focus {
+  border-color: #175cd3;
+  box-shadow: 0 0 0 3px rgba(23, 92, 211, 0.1);
+}
+
+.duty-buttons select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.my-attendance-home-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: all 0.2s ease;
+}
+
+.my-attendance-home-button:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+}
+
+.my-attendance-home-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.12);
+}
+
+.my-attendance-home-button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.3);
+  outline-offset: 2px;
+}
+.my-attendance-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 10px;
+  background: #0b2545;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.my-attendance-button:hover {
+  background: #123a68;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(11, 37, 69, 0.18);
+}
+
+.my-attendance-button:active {
+  transform: translateY(0);
+}
+
+.my-attendance-button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.3);
+  outline-offset: 2px;
+}

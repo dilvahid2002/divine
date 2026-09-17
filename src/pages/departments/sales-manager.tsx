@@ -688,9 +688,9 @@ function SalesManager({
           job,
           completedItems: job.items.filter(
             (item) =>
-              item.printStatus !== 'na' &&
-              item.printStatus !== 'NA' &&
-              item.printStatus !== 'not applicable',
+              item.cuttingStatus !== 'na' &&
+              item.cuttingStatus !== 'NA' &&
+              item.cuttingStatus !== 'not applicable',
           ),
         })
 
@@ -956,11 +956,7 @@ function SalesManager({
           <button
             type="button"
             className="add-item-button"
-            onClick={() =>
-              navigate(
-                '/departments/attendance',
-              )
-            }
+            onClick={() => navigate('/attandance')}
           >
             Attendance
           </button>
