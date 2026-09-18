@@ -1410,13 +1410,17 @@ function Sales({ user }: SalesProps) {
             </p>
           </div>
 
-          <button
-  type="button"
-  className="add-item-button"
-  onClick={() => navigate('/job-order')}
->
-  + Job Order
-</button>
+            <button
+              type="button"
+              className="add-item-button"
+              onClick={() =>
+                navigate(
+                  '/departments/job-order',
+                )
+              }
+            >
+              + Job Order
+            </button>
           
            <button
             type="button"

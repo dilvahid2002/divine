@@ -32,6 +32,11 @@ import LiveProduction from './pages/departments/live-production'
 
 import './App.css'
 
+
+/* =========================================
+   USER TYPE
+========================================= */
+
 interface User {
   name: string
   username: string
@@ -39,17 +44,28 @@ interface User {
   roles: string[]
 }
 
+
+/* =========================================
+   DEPARTMENT ROUTE PROPS
+========================================= */
+
 interface DepartmentRouteProps {
   user: User
   role: string
   children: ReactNode
 }
 
+
+/* =========================================
+   DEPARTMENT ACCESS
+========================================= */
+
 function DepartmentRoute({
   user,
   role,
   children,
 }: DepartmentRouteProps) {
+
   const hasAccess = user.roles.some(
     (userRole) =>
       userRole.trim().toLowerCase() ===
@@ -68,44 +84,50 @@ function DepartmentRoute({
   return <>{children}</>
 }
 
+
+/* =========================================
+   APP
+========================================= */
+
 function App() {
+
   const [currentUser, setCurrentUser] =
     useState<User | null>(null)
 
-  /*
-   * =========================================
-   * LOGIN
-   * =========================================
-   */
+
+  /* =========================================
+     LOGIN
+  ========================================== */
 
   const handleLogin = (user: User) => {
     setCurrentUser(user)
   }
 
-  /*
-   * =========================================
-   * USER NOT LOGGED IN
-   * =========================================
-   */
+
+  /* =========================================
+     USER NOT LOGGED IN
+  ========================================== */
 
   if (!currentUser) {
     return (
       <BrowserRouter>
+
         <LoginPage
           onLogin={handleLogin}
         />
+
       </BrowserRouter>
     )
   }
 
-  /*
-   * =========================================
-   * APPLICATION ROUTES
-   * =========================================
-   */
+
+  /* =========================================
+     APPLICATION ROUTES
+  ========================================== */
 
   return (
     <BrowserRouter>
+
       <Routes>
 
         {/* =========================================
@@ -115,10 +137,8 @@ function App() {
         <Route
           path="/"
           element={
-            currentUser.username ===
-              'admin' &&
-            currentUser.password ===
-              'admin' ? (
+            currentUser.username === 'admin' &&
+            currentUser.password === 'admin' ? (
               <UserManager />
             ) : (
               <HomePage
@@ -128,8 +148,9 @@ function App() {
           }
         />
 
+
         {/* =========================================
-            ATTENDANCE - MANAGER / GENERAL
+            ATTENDANCE
         ========================================== */}
 
         <Route
@@ -139,9 +160,9 @@ function App() {
           }
         />
 
+
         {/* =========================================
             OLD ATTENDANCE URL
-            Kept for compatibility
         ========================================== */}
 
         <Route
@@ -150,6 +171,7 @@ function App() {
             <Attendance />
           }
         />
+
 
         {/* =========================================
             MY ATTENDANCE
@@ -164,14 +186,17 @@ function App() {
           }
         />
 
+
         {/* =========================================
             JOB ORDER
         ========================================== */}
 
         <Route
-          path="/job-order"
+          path="/departments/job-order"
           element={
-            <JobOrder />
+            <JobOrder
+              user={currentUser}
+            />
           }
         />
 
@@ -193,6 +218,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             SALES STATISTICS
         ========================================== */}
@@ -205,6 +231,7 @@ function App() {
             />
           }
         />
+
 
         {/* =========================================
             CUTTING
@@ -219,6 +246,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             MEASUREMENT
         ========================================== */}
@@ -231,6 +259,7 @@ function App() {
             />
           }
         />
+
 
         {/* =========================================
             DESIGNER
@@ -250,6 +279,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             PRINTER
         ========================================== */}
@@ -267,6 +297,7 @@ function App() {
             </DepartmentRoute>
           }
         />
+
 
         {/* =========================================
             PRODUCTION
@@ -286,6 +317,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             PRODUCTION MANAGER
         ========================================== */}
@@ -302,6 +334,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             SALES MANAGER
         ========================================== */}
@@ -317,6 +350,7 @@ function App() {
             </DepartmentRoute>
           }
         />
+
 
         {/* =========================================
             ACCOUNTANT
@@ -336,6 +370,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             MD
         ========================================== */}
@@ -352,6 +387,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             HR
         ========================================== */}
@@ -367,6 +403,7 @@ function App() {
             </DepartmentRoute>
           }
         />
+
 
         {/* =========================================
             LIVE PRODUCTION
@@ -386,6 +423,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             UNKNOWN URL
         ========================================== */}
@@ -401,8 +439,10 @@ function App() {
         />
 
       </Routes>
+
     </BrowserRouter>
   )
 }
+
 
 export default App
