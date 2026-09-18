@@ -136,120 +136,167 @@ const printJobOrderA4 = (order: JobOrder) => {
       <head>
         <title>Job Order #${escapeHtml(order.orderId)}</title>
         <style>
-          @page {
-            size: A4;
-            margin: 12mm;
-          }
+  @page {
+    size: A5 landscape;
+    margin: 8mm;
+  }
 
-          * {
-            box-sizing: border-box;
-          }
+  * {
+    box-sizing: border-box;
+  }
 
-          body {
-            font-family: Arial, Helvetica, sans-serif;
-            color: #111827;
-            margin: 0;
-            font-size: 11px;
-          }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    color: #111827;
+    margin: 0;
+    font-size: 9px;
+  }
 
-          .page {
-            width: 100%;
-          }
+  .page {
+    width: 100%;
+  }
 
-          .header {
-            border-bottom: 2px solid #111827;
-            padding-bottom: 10px;
-            margin-bottom: 14px;
-          }
+  /* =========================================
+     HEADER
+  ========================================= */
 
-          .title {
-            font-size: 22px;
-            font-weight: 800;
-            margin: 0 0 4px;
-          }
+  .header {
+    border-bottom: 2px solid #111827;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+  }
 
-          .subtitle {
-            font-size: 12px;
-            color: #4b5563;
-          }
+  .title {
+    font-size: 17px;
+    font-weight: 800;
+    margin: 0 0 2px;
+  }
 
-          .grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin-bottom: 14px;
-          }
+  .subtitle {
+    font-size: 9px;
+    color: #4b5563;
+  }
 
-          .box {
-            border: 1px solid #d1d5db;
-            border-radius: 5px;
-            padding: 8px;
-            min-height: 48px;
-          }
+  /* =========================================
+     INFORMATION GRID
+  ========================================= */
 
-          .label {
-            display: block;
-            font-size: 9px;
-            color: #6b7280;
-            margin-bottom: 3px;
-            text-transform: uppercase;
-          }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    margin-bottom: 8px;
+  }
 
-          .value {
-            font-weight: 700;
-          }
+  .box {
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 5px;
+    min-height: 34px;
+  }
 
-          h2 {
-            font-size: 14px;
-            margin: 14px 0 7px;
-            border-bottom: 1px solid #d1d5db;
-            padding-bottom: 4px;
-          }
+  .label {
+    display: block;
+    font-size: 7px;
+    color: #6b7280;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+  }
 
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 10px;
-          }
+  .value {
+    font-weight: 700;
+    font-size: 8.5px;
+  }
 
-          th,
-          td {
-            border: 1px solid #d1d5db;
-            padding: 5px;
-            vertical-align: top;
-          }
+  /* =========================================
+     SECTION HEADINGS
+  ========================================= */
 
-          th {
-            background: #f3f4f6;
-            font-size: 9px;
-          }
+  h2 {
+    font-size: 10px;
+    margin: 8px 0 4px;
+    border-bottom: 1px solid #d1d5db;
+    padding-bottom: 3px;
+  }
 
-          td {
-            font-size: 10px;
-          }
+  /* =========================================
+     TABLES
+  ========================================= */
 
-          .item-image {
-            width: 45px;
-            height: 45px;
-            object-fit: cover;
-            border-radius: 3px;
-          }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6px;
+  }
 
-          .footer {
-            margin-top: 15px;
-            padding-top: 8px;
-            border-top: 1px solid #d1d5db;
-            color: #6b7280;
-            font-size: 9px;
-          }
+  th,
+  td {
+    border: 1px solid #d1d5db;
+    padding: 3px 4px;
+    vertical-align: top;
+  }
 
-          @media print {
-            body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-          }
-        </style>
+  th {
+    background: #f3f4f6;
+    font-size: 7px;
+    font-weight: 700;
+  }
+
+  td {
+    font-size: 8px;
+  }
+
+  /* =========================================
+     ITEM IMAGE
+  ========================================= */
+
+  .item-image {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 2px;
+  }
+
+  /* =========================================
+     FOOTER
+  ========================================= */
+
+  .footer {
+    margin-top: 8px;
+    padding-top: 5px;
+    border-top: 1px solid #d1d5db;
+    color: #6b7280;
+    font-size: 7px;
+  }
+
+  /* =========================================
+     PRINT
+  ========================================= */
+
+  @media print {
+    body {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      width: 100%;
+    }
+
+    table {
+      page-break-inside: auto;
+    }
+
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+
+    .box {
+      page-break-inside: avoid;
+    }
+  }
+</style>
       </head>
 
       <body>
