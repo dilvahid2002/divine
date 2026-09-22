@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react'
 import {
   collection,
@@ -18,6 +19,12 @@ interface SalesManagerProps {
 }
 
 type JobStatus = 'Pending' | 'In Progress' | 'Finished'
+
+type DepartmentType =
+  | 'designer'
+  | 'printer'
+  | 'cutting'
+  | 'production'
 
 interface JobItem {
   slNo?: number
@@ -118,7 +125,10 @@ interface DepartmentRowWithFiles extends DepartmentRow {
 }
 
 const getString = (value: unknown): string => {
-  if (typeof value === 'string' || typeof value === 'number') {
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number'
+  ) {
     return String(value)
   }
 
@@ -127,19 +137,33 @@ const getString = (value: unknown): string => {
 
 const getNumber = (value: unknown): number => {
   const number = Number(value)
-  return Number.isFinite(number) ? number : 0
+
+  return Number.isFinite(number)
+    ? number
+    : 0
 }
 
-const getOptionalNumber = (value: unknown): number | undefined => {
-  if (value === undefined || value === null || value === '') {
+const getOptionalNumber = (
+  value: unknown,
+): number | undefined => {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
     return undefined
   }
 
   const number = Number(value)
-  return Number.isFinite(number) ? number : undefined
+
+  return Number.isFinite(number)
+    ? number
+    : undefined
 }
 
-const getStatus = (value: unknown): JobStatus => {
+const getStatus = (
+  value: unknown,
+): JobStatus => {
   if (
     value === 'Pending' ||
     value === 'In Progress' ||
@@ -151,22 +175,6 @@ const getStatus = (value: unknown): JobStatus => {
   return 'Pending'
 }
 
-/*
- * This follows the Sales page data structure:
- *
- * orderId / measurementId
- * date
- * expectedDeliveryDate / deliveryDate
- * branch
- * customer.*
- * items[]
- * officeInfo.*
- * customerAdviser.*
- * acceptingOrder.*
- * statuses.*
- * designCharge
- * delivered
- */
 const createJobRecord = (
   documentId: string,
   data: any,
@@ -194,11 +202,14 @@ const createJobRecord = (
         .map((staff: any) => ({
           userId: getString(staff?.userId),
           name: getString(staff?.name),
-          username: getString(staff?.username),
+          username: getString(
+            staff?.username,
+          ),
         }))
         .filter(
           (staff: ProductionStaff) =>
-            !!staff.name || !!staff.username,
+            !!staff.name ||
+            !!staff.username,
         )
     : []
 
@@ -221,15 +232,19 @@ const createJobRecord = (
 
     customer: {
       name: getString(customer?.name),
+
       companyName: getString(
         customer?.companyName,
       ),
+
       phoneNumber: getString(
         customer?.phoneNumber,
       ),
+
       whatsappNumber: getString(
         customer?.whatsappNumber,
       ),
+
       place: getString(customer?.place),
     },
 
@@ -238,17 +253,45 @@ const createJobRecord = (
         typeof item?.slNo === 'number'
           ? item.slNo
           : undefined,
+
       name: getString(item?.name),
+
       width: getString(item?.width),
+
       height: getString(item?.height),
+
       qty: getString(item?.qty),
+
       price: getString(item?.price),
-      remarks: getString(item?.remarks),
-      designStatus: getString(item?.designStatus).toLowerCase(),
-      printStatus: getString(item?.printStatus).toLowerCase(),
-      cuttingStatus: getString(item?.cuttingStatus).toLowerCase(),
-      productionStatus: getString(item?.productionStatus).toLowerCase(),
-      designCharge: getOptionalNumber(item?.designCharge),
+
+      remarks: getString(
+        item?.remarks,
+      ),
+
+      designStatus:
+        getString(
+          item?.designStatus,
+        ).toLowerCase(),
+
+      printStatus:
+        getString(
+          item?.printStatus,
+        ).toLowerCase(),
+
+      cuttingStatus:
+        getString(
+          item?.cuttingStatus,
+        ).toLowerCase(),
+
+      productionStatus:
+        getString(
+          item?.productionStatus,
+        ).toLowerCase(),
+
+      designCharge:
+        getOptionalNumber(
+          item?.designCharge,
+        ),
     })),
 
     officeInfo: {
@@ -265,7 +308,9 @@ const createJobRecord = (
         officeInfo?.productionJob === true,
 
       designer:
-        getString(officeInfo?.designer) || null,
+        getString(
+          officeInfo?.designer,
+        ) || null,
 
       designerUsername:
         getString(
@@ -273,7 +318,9 @@ const createJobRecord = (
         ) || null,
 
       printer:
-        getString(officeInfo?.printer) || null,
+        getString(
+          officeInfo?.printer,
+        ) || null,
 
       printerUsername:
         getString(
@@ -286,7 +333,9 @@ const createJobRecord = (
         ) || null,
 
       cutting:
-        getString(officeInfo?.cutting) || null,
+        getString(
+          officeInfo?.cutting,
+        ) || null,
 
       cuttingUsername:
         getString(
@@ -307,7 +356,10 @@ const createJobRecord = (
     },
 
     customerAdviser: {
-      name: getString(adviser?.name),
+      name: getString(
+        adviser?.name,
+      ),
+
       username: getString(
         adviser?.username,
       ),
@@ -319,6 +371,7 @@ const createJobRecord = (
             name: getString(
               data.acceptingOrder?.name,
             ),
+
             username: getString(
               data.acceptingOrder?.username,
             ),
@@ -329,12 +382,15 @@ const createJobRecord = (
       design: getStatus(
         data?.statuses?.design,
       ),
+
       print: getStatus(
         data?.statuses?.print,
       ),
+
       cutting: getStatus(
         data?.statuses?.cutting,
       ),
+
       production: getStatus(
         data?.statuses?.production,
       ),
@@ -363,24 +419,44 @@ const getDisplayName = (
 const getSquareFeet = (
   items: JobItem[],
 ): number => {
-  return items.reduce((total, item) => {
-    const width = getNumber(item?.width)
-    const height = getNumber(item?.height)
-    const qty = getNumber(item?.qty) || 1
+  return items.reduce(
+    (total, item) => {
+      const width = getNumber(
+        item?.width,
+      )
 
-    if (width <= 0 || height <= 0) {
-      return total
-    }
+      const height = getNumber(
+        item?.height,
+      )
 
-    return (
-      total +
-      (width * height * qty) / 144
-    )
-  }, 0)
+      const qty =
+        getNumber(item?.qty) || 1
+
+      if (
+        width <= 0 ||
+        height <= 0
+      ) {
+        return total
+      }
+
+      return (
+        total +
+        (width *
+          height *
+          qty) /
+          144
+      )
+    },
+    0,
+  )
 }
 
-const formatDate = (value: string): string => {
-  if (!value) return '-'
+const formatDate = (
+  value: string,
+): string => {
+  if (!value) {
+    return '-'
+  }
 
   const parts = value.split('-')
 
@@ -394,22 +470,34 @@ const formatDate = (value: string): string => {
     Number(parts[2]),
   )
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return value
   }
 
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
+  return date.toLocaleDateString(
+    'en-IN',
+    {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    },
+  )
 }
 
-const sortRows = <T extends { name: string }>(
+const sortRows = <
+  T extends { name: string },
+>(
   rows: T[],
 ): T[] => {
-  return [...rows].sort((a, b) =>
-    a.name.localeCompare(b.name),
+  return [...rows].sort(
+    (a, b) =>
+      a.name.localeCompare(
+        b.name,
+      ),
   )
 }
 
@@ -419,10 +507,15 @@ function SalesManager({
   const navigate = useNavigate()
 
   const today = new Date()
+
   const todayKey = [
     today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, '0'),
-    String(today.getDate()).padStart(2, '0'),
+    String(
+      today.getMonth() + 1,
+    ).padStart(2, '0'),
+    String(
+      today.getDate(),
+    ).padStart(2, '0'),
   ].join('-')
 
   const [dateFrom, setDateFrom] =
@@ -431,9 +524,8 @@ function SalesManager({
   const [dateTo, setDateTo] =
     useState(todayKey)
 
-  const [jobs, setJobs] = useState<JobRecord[]>(
-    [],
-  )
+  const [jobs, setJobs] =
+    useState<JobRecord[]>([])
 
   const [loading, setLoading] =
     useState(true)
@@ -441,22 +533,19 @@ function SalesManager({
   const [error, setError] =
     useState('')
 
-  const [viewDepartment, setViewDepartment] =
-    useState<'designer' | 'printer' | 'cutting' | 'production' | null>(null)
+  const [
+    viewDepartment,
+    setViewDepartment,
+  ] =
+    useState<DepartmentType | null>(
+      null,
+    )
 
   const [viewRow, setViewRow] =
-    useState<DepartmentRowWithFiles | null>(null)
+    useState<
+      DepartmentRowWithFiles | null
+    >(null)
 
-  /*
-   * EXACTLY LIKE SALES:
-   * - read job_orders with onSnapshot
-   * - use orderBy(createdAt, desc)
-   * - normalize the same fields
-   *
-   * We also read measurements using the same
-   * field structure so Measurement-created work
-   * is included in the manager dashboard.
-   */
   useEffect(() => {
     let jobOrders: JobRecord[] = []
     let measurements: JobRecord[] = []
@@ -472,27 +561,41 @@ function SalesManager({
     }
 
     const jobOrdersQuery = query(
-      collection(db, 'job_orders'),
-      orderBy('createdAt', 'desc'),
+      collection(
+        db,
+        'job_orders',
+      ),
+      orderBy(
+        'createdAt',
+        'desc',
+      ),
     )
 
-    const measurementsQuery = query(
-      collection(db, 'measurements'),
-      orderBy('createdAt', 'desc'),
-    )
+    const measurementsQuery =
+      query(
+        collection(
+          db,
+          'measurements',
+        ),
+        orderBy(
+          'createdAt',
+          'desc',
+        ),
+      )
 
     const unsubscribeJobOrders =
       onSnapshot(
         jobOrdersQuery,
         (snapshot) => {
-          jobOrders = snapshot.docs.map(
-            (document) =>
-              createJobRecord(
-                document.id,
-                document.data(),
-                'job_order',
-              ),
-          )
+          jobOrders =
+            snapshot.docs.map(
+              (document) =>
+                createJobRecord(
+                  document.id,
+                  document.data(),
+                  'job_order',
+                ),
+            )
 
           publish()
         },
@@ -514,14 +617,15 @@ function SalesManager({
       onSnapshot(
         measurementsQuery,
         (snapshot) => {
-          measurements = snapshot.docs.map(
-            (document) =>
-              createJobRecord(
-                document.id,
-                document.data(),
-                'measurement',
-              ),
-          )
+          measurements =
+            snapshot.docs.map(
+              (document) =>
+                createJobRecord(
+                  document.id,
+                  document.data(),
+                  'measurement',
+                ),
+            )
 
           publish()
         },
@@ -550,263 +654,68 @@ function SalesManager({
     !!dateTo &&
     dateFrom <= dateTo
 
-  /*
-   * IMPORTANT:
-   *
-   * Sales has a reliable "date" field.
-   * The old Sales Manager depended on department
-   * finish timestamps which are not part of the
-   * Sales data structure.
-   *
-   * Therefore this dashboard filters by the
-   * Sales "date" field and then checks whether
-   * the department status is Finished.
-   */
-  const jobsInRange = useMemo(() => {
-    if (!validRange) {
-      return []
-    }
-
-    return jobs.filter((job) => {
-      if (!job.date) {
-        return false
+  const jobsInRange =
+    useMemo(() => {
+      if (!validRange) {
+        return []
       }
 
-      return (
-        job.date >= dateFrom &&
-        job.date <= dateTo
-      )
-    })
-  }, [
-    jobs,
-    dateFrom,
-    dateTo,
-    validRange,
-  ])
-
-  const designerRows =
-    useMemo<DepartmentRowWithFiles[]>(() => {
-      const map =
-        new Map<string, DepartmentRow>()
-
-      jobsInRange.forEach((job) => {
-        if (
-          !job.officeInfo.designJob ||
-          job.statuses.design !== 'Finished'
-        ) {
-          return
-        }
-
-        const name = getDisplayName(
-          job.officeInfo.designer,
-          job.officeInfo.designerUsername,
-        )
-
-        const username =
-          job.officeInfo.designerUsername || ''
-
-        const key =
-          username ||
-          name.toLowerCase()
-
-        const current =
-          map.get(key) || {
-            name,
-            username,
-            completedWorks: 0,
-            totalDesignCharge: 0,
-            files: [],
+      return jobs.filter(
+        (job) => {
+          if (!job.date) {
+            return false
           }
 
-        current.completedWorks += 1
-        // Design charge is stored once at the job level.
-        // It is displayed once with rowspan in the View table.
-        current.totalDesignCharge =
-          (current.totalDesignCharge || 0) +
-          job.designCharge
-
-        const completedItems = job.items.filter(
-          (item) =>
-            item.designStatus !== 'na' &&
-            item.designStatus !== 'NA' &&
-            item.designStatus !== 'not applicable',
-        )
-
-        current.files.push({
-          job,
-          completedItems,
-        })
-
-        map.set(key, current)
-      })
-
-      return sortRows(
-        Array.from(map.values()),
-      )
-    }, [jobsInRange])
-
-  const printerRows =
-    useMemo<DepartmentRowWithFiles[]>(() => {
-      const map =
-        new Map<string, DepartmentRow>()
-
-      jobsInRange.forEach((job) => {
-        if (
-          !job.officeInfo.printJob ||
-          job.statuses.print !== 'Finished'
-        ) {
-          return
-        }
-
-        const name = getDisplayName(
-          job.officeInfo.printer,
-          job.officeInfo.printerUsername,
-        )
-
-        const username =
-          job.officeInfo.printerUsername || ''
-
-        const key =
-          username ||
-          name.toLowerCase()
-
-        const current =
-          map.get(key) || {
-            name,
-            username,
-            completedWorks: 0,
-            totalSquareFeet: 0,
-            files: [],
-          }
-
-        current.completedWorks += 1
-        current.totalSquareFeet =
-          (current.totalSquareFeet || 0) +
-          getSquareFeet(job.items)
-
-        current.files.push({
-          job,
-          completedItems: job.items.filter(
-            (item) =>
-              item.cuttingStatus !== 'na' &&
-              item.cuttingStatus !== 'NA' &&
-              item.cuttingStatus !== 'not applicable',
-          ),
-        })
-
-        map.set(key, current)
-      })
-
-      return sortRows(
-        Array.from(map.values()),
-      )
-    }, [jobsInRange])
-
-  const cuttingRows =
-    useMemo<DepartmentRowWithFiles[]>(() => {
-      const map =
-        new Map<string, DepartmentRow>()
-
-      jobsInRange.forEach((job) => {
-        if (
-          !job.officeInfo.cuttingJob ||
-          job.statuses.cutting !== 'Finished'
-        ) {
-          return
-        }
-
-        const name = getDisplayName(
-          job.officeInfo.cutting,
-          job.officeInfo.cuttingUsername,
-        )
-
-        const username =
-          job.officeInfo.cuttingUsername || ''
-
-        const key =
-          username ||
-          name.toLowerCase()
-
-        const current =
-          map.get(key) || {
-            name,
-            username,
-            completedWorks: 0,
-            totalSquareFeet: 0,
-            files: [],
-          }
-
-        current.completedWorks += 1
-        current.totalSquareFeet =
-          (current.totalSquareFeet || 0) +
-          getSquareFeet(job.items)
-
-        current.files.push({
-          job,
-          completedItems: job.items.filter(
-            (item) =>
-              item.printStatus !== 'na' &&
-              item.printStatus !== 'NA' &&
-              item.printStatus !== 'not applicable',
-          ),
-        })
-
-        map.set(key, current)
-      })
-
-      return sortRows(
-        Array.from(map.values()),
-      )
-    }, [jobsInRange])
-
-  const productionRows =
-    useMemo<DepartmentRowWithFiles[]>(() => {
-      const map =
-        new Map<string, DepartmentRow>()
-
-      jobsInRange.forEach((job) => {
-        if (
-          !job.officeInfo.productionJob ||
-          job.statuses.production !==
-            'Finished'
-        ) {
-          return
-        }
-
-        const staff =
-          job.officeInfo.productionStaff
-
-        if (staff.length === 0) {
-          const current =
-            map.get('unassigned') || {
-              name: 'Unassigned',
-              username: '',
-              completedWorks: 0,
-              files: [],
-            }
-
-          current.completedWorks += 1
-          current.files.push({
-            job,
-            completedItems: job.items.filter(
-              (item) =>
-                item.productionStatus !== 'na' &&
-                item.productionStatus !== 'NA' &&
-                item.productionStatus !== 'not applicable',
-            ),
-          })
-          map.set('unassigned', current)
-          return
-        }
-
-        staff.forEach((member) => {
-          const name = getDisplayName(
-            member.name,
-            member.username,
+          return (
+            job.date >=
+              dateFrom &&
+            job.date <= dateTo
           )
+        },
+      )
+    }, [
+      jobs,
+      dateFrom,
+      dateTo,
+      validRange,
+    ])
+
+  /*
+   * DESIGNER
+   */
+  const designerRows =
+    useMemo<
+      DepartmentRowWithFiles[]
+    >(() => {
+      const map =
+        new Map<
+          string,
+          DepartmentRowWithFiles
+        >()
+
+      jobsInRange.forEach(
+        (job) => {
+          if (
+            !job.officeInfo
+              .designJob ||
+            job.statuses.design !==
+              'Finished'
+          ) {
+            return
+          }
+
+          const name =
+            getDisplayName(
+              job.officeInfo
+                .designer,
+              job.officeInfo
+                .designerUsername,
+            )
 
           const username =
-            member.username || ''
+            job.officeInfo
+              .designerUsername ||
+            ''
 
           const key =
             username ||
@@ -817,88 +726,342 @@ function SalesManager({
               name,
               username,
               completedWorks: 0,
+              totalDesignCharge: 0,
               files: [],
             }
 
           current.completedWorks += 1
+
+          current.totalDesignCharge =
+            (current.totalDesignCharge ||
+              0) +
+            job.designCharge
+
+          const completedItems =
+            job.items.filter(
+              (item) =>
+                item.designStatus !==
+                  'na' &&
+                item.designStatus !==
+                  'NA' &&
+                item.designStatus !==
+                  'not applicable',
+            )
+
           current.files.push({
             job,
-            completedItems: job.items.filter(
-              (item) =>
-                item.productionStatus !== 'na' &&
-                item.productionStatus !== 'NA' &&
-                item.productionStatus !== 'not applicable',
-            ),
+            completedItems,
           })
-          map.set(key, current)
-        })
-      })
+
+          map.set(
+            key,
+            current,
+          )
+        },
+      )
 
       return sortRows(
-        Array.from(map.values()),
+        Array.from(
+          map.values(),
+        ),
       )
     }, [jobsInRange])
 
-  const totals = useMemo(() => {
-    return {
-      designWorks:
-        designerRows.reduce(
-          (sum, row) =>
-            sum + row.completedWorks,
-          0,
-        ),
+  /*
+   * PRINTER
+   */
+  const printerRows =
+    useMemo<
+      DepartmentRowWithFiles[]
+    >(() => {
+      const map =
+        new Map<
+          string,
+          DepartmentRowWithFiles
+        >()
 
-      designCharge:
-        designerRows.reduce(
-          (sum, row) =>
-            sum +
-            (row.totalDesignCharge || 0),
-          0,
-        ),
+      jobsInRange.forEach(
+        (job) => {
+          if (
+            !job.officeInfo
+              .printJob ||
+            job.statuses.print !==
+              'Finished'
+          ) {
+            return
+          }
 
-      printWorks:
-        printerRows.reduce(
-          (sum, row) =>
-            sum + row.completedWorks,
-          0,
-        ),
+          const name =
+            getDisplayName(
+              job.officeInfo
+                .printer,
+              job.officeInfo
+                .printerUsername,
+            )
 
-      printSquareFeet:
-        printerRows.reduce(
-          (sum, row) =>
-            sum +
-            (row.totalSquareFeet || 0),
-          0,
-        ),
+          const username =
+            job.officeInfo
+              .printerUsername ||
+            ''
 
-      cuttingWorks:
-        cuttingRows.reduce(
-          (sum, row) =>
-            sum + row.completedWorks,
-          0,
-        ),
+          const key =
+            username ||
+            name.toLowerCase()
 
-      cuttingSquareFeet:
-        cuttingRows.reduce(
-          (sum, row) =>
-            sum +
-            (row.totalSquareFeet || 0),
-          0,
-        ),
+          const current =
+            map.get(key) || {
+              name,
+              username,
+              completedWorks: 0,
+              totalSquareFeet: 0,
+              files: [],
+            }
 
-      productionWorks:
-        productionRows.reduce(
-          (sum, row) =>
-            sum + row.completedWorks,
-          0,
+          current.completedWorks += 1
+
+          current.totalSquareFeet =
+            (current.totalSquareFeet ||
+              0) +
+            getSquareFeet(
+              job.items,
+            )
+
+          current.files.push({
+            job,
+            completedItems:
+              job.items.filter(
+                (item) =>
+                  item.cuttingStatus !==
+                    'na' &&
+                  item.cuttingStatus !==
+                    'NA' &&
+                  item.cuttingStatus !==
+                    'not applicable',
+              ),
+          })
+
+          map.set(
+            key,
+            current,
+          )
+        },
+      )
+
+      return sortRows(
+        Array.from(
+          map.values(),
         ),
-    }
-  }, [
-    designerRows,
-    printerRows,
-    cuttingRows,
-    productionRows,
-  ])
+      )
+    }, [jobsInRange])
+
+  /*
+   * CUTTING
+   */
+  const cuttingRows =
+    useMemo<
+      DepartmentRowWithFiles[]
+    >(() => {
+      const map =
+        new Map<
+          string,
+          DepartmentRowWithFiles
+        >()
+
+      jobsInRange.forEach(
+        (job) => {
+          if (
+            !job.officeInfo
+              .cuttingJob ||
+            job.statuses.cutting !==
+              'Finished'
+          ) {
+            return
+          }
+
+          const name =
+            getDisplayName(
+              job.officeInfo
+                .cutting,
+              job.officeInfo
+                .cuttingUsername,
+            )
+
+          const username =
+            job.officeInfo
+              .cuttingUsername ||
+            ''
+
+          const key =
+            username ||
+            name.toLowerCase()
+
+          const current =
+            map.get(key) || {
+              name,
+              username,
+              completedWorks: 0,
+              totalSquareFeet: 0,
+              files: [],
+            }
+
+          current.completedWorks += 1
+
+          current.totalSquareFeet =
+            (current.totalSquareFeet ||
+              0) +
+            getSquareFeet(
+              job.items,
+            )
+
+          current.files.push({
+            job,
+            completedItems:
+              job.items.filter(
+                (item) =>
+                  item.printStatus !==
+                    'na' &&
+                  item.printStatus !==
+                    'NA' &&
+                  item.printStatus !==
+                    'not applicable',
+              ),
+          })
+
+          map.set(
+            key,
+            current,
+          )
+        },
+      )
+
+      return sortRows(
+        Array.from(
+          map.values(),
+        ),
+      )
+    }, [jobsInRange])
+
+  /*
+   * PRODUCTION
+   */
+  const productionRows =
+    useMemo<
+      DepartmentRowWithFiles[]
+    >(() => {
+      const map =
+        new Map<
+          string,
+          DepartmentRowWithFiles
+        >()
+
+      jobsInRange.forEach(
+        (job) => {
+          if (
+            !job.officeInfo
+              .productionJob ||
+            job.statuses
+              .production !==
+              'Finished'
+          ) {
+            return
+          }
+
+          const staff =
+            job.officeInfo
+              .productionStaff
+
+          if (
+            staff.length === 0
+          ) {
+            const current =
+              map.get(
+                'unassigned',
+              ) || {
+                name: 'Unassigned',
+                username: '',
+                completedWorks: 0,
+                files: [],
+              }
+
+            current.completedWorks += 1
+
+            current.files.push({
+              job,
+              completedItems:
+                job.items.filter(
+                  (item) =>
+                    item.productionStatus !==
+                      'na' &&
+                    item.productionStatus !==
+                      'NA' &&
+                    item.productionStatus !==
+                      'not applicable',
+                ),
+            })
+
+            map.set(
+              'unassigned',
+              current,
+            )
+
+            return
+          }
+
+          staff.forEach(
+            (member) => {
+              const name =
+                getDisplayName(
+                  member.name,
+                  member.username,
+                )
+
+              const username =
+                member.username ||
+                ''
+
+              const key =
+                username ||
+                name.toLowerCase()
+
+              const current =
+                map.get(key) || {
+                  name,
+                  username,
+                  completedWorks: 0,
+                  files: [],
+                }
+
+              current.completedWorks += 1
+
+              current.files.push({
+                job,
+                completedItems:
+                  job.items.filter(
+                    (item) =>
+                      item.productionStatus !==
+                        'na' &&
+                      item.productionStatus !==
+                        'NA' &&
+                      item.productionStatus !==
+                        'not applicable',
+                  ),
+              })
+
+              map.set(
+                key,
+                current,
+              )
+            },
+          )
+        },
+      )
+
+      return sortRows(
+        Array.from(
+          map.values(),
+        ),
+      )
+    }, [jobsInRange])
 
   const clearDates = () => {
     setDateFrom('')
@@ -912,6 +1075,11 @@ function SalesManager({
     </div>
   )
 
+  const closeView = () => {
+    setViewRow(null)
+    setViewDepartment(null)
+  }
+
   if (loading) {
     return (
       <div className="department-page">
@@ -921,6 +1089,7 @@ function SalesManager({
               <h1>
                 Sales Manager Dashboard
               </h1>
+
               <p>
                 Loading department
                 performance...
@@ -935,6 +1104,8 @@ function SalesManager({
   return (
     <div className="department-page">
       <div className="department-container">
+
+        {/* HEADER */}
         <div className="department-header">
           <div>
             <h1>
@@ -956,7 +1127,9 @@ function SalesManager({
           <button
             type="button"
             className="add-item-button"
-            onClick={() => navigate('/attandance')}
+            onClick={() =>
+              navigate('/attandance')
+            }
           >
             Attendance
           </button>
@@ -968,6 +1141,7 @@ function SalesManager({
           </div>
         )}
 
+        {/* DATE FILTER */}
         <section className="department-section">
           <div className="section-heading-row">
             <div>
@@ -1022,7 +1196,8 @@ function SalesManager({
               className="input-group"
               style={{
                 display: 'flex',
-                alignItems: 'flex-end',
+                alignItems:
+                  'flex-end',
               }}
             >
               <button
@@ -1038,7 +1213,9 @@ function SalesManager({
           {!validRange && (
             <div
               className="form-message"
-              style={{ marginTop: '15px' }}
+              style={{
+                marginTop: '15px',
+              }}
             >
               Please select a valid date
               range.
@@ -1048,26 +1225,39 @@ function SalesManager({
           {validRange && (
             <div
               className="statistics-filter-bar"
-              style={{ marginTop: '15px' }}
+              style={{
+                marginTop: '15px',
+              }}
             >
               <span>
-                <strong>From:</strong>{' '}
-                {formatDate(dateFrom)}
+                <strong>
+                  From:
+                </strong>{' '}
+                {formatDate(
+                  dateFrom,
+                )}
               </span>
 
               <span>
-                <strong>To:</strong>{' '}
-                {formatDate(dateTo)}
+                <strong>
+                  To:
+                </strong>{' '}
+                {formatDate(
+                  dateTo,
+                )}
               </span>
 
               <span>
-                <strong>Records:</strong>{' '}
+                <strong>
+                  Records:
+                </strong>{' '}
                 {jobsInRange.length}
               </span>
             </div>
           )}
         </section>
 
+        {/* DESIGNER */}
         <section className="department-section">
           <div className="section-heading-row">
             <div>
@@ -1108,14 +1298,21 @@ function SalesManager({
                       <tr
                         key={`${row.username}-${row.name}`}
                       >
-                        <td>{row.name}</td>
+                        <td>
+                          {row.name}
+                        </td>
+
                         <td>
                           {row.username ||
                             '-'}
                         </td>
+
                         <td>
-                          {row.completedWorks}
+                          {
+                            row.completedWorks
+                          }
                         </td>
+
                         <td>
                           ₹
                           {(
@@ -1129,13 +1326,19 @@ function SalesManager({
                             },
                           )}
                         </td>
+
                         <td>
                           <button
                             type="button"
                             className="add-item-button"
                             onClick={() => {
-                              setViewDepartment('designer')
-                              setViewRow(row)
+                              setViewDepartment(
+                                'designer',
+                              )
+
+                              setViewRow(
+                                row,
+                              )
                             }}
                           >
                             View
@@ -1150,6 +1353,7 @@ function SalesManager({
           )}
         </section>
 
+        {/* PRINTER */}
         <section className="department-section">
           <div className="section-heading-row">
             <div>
@@ -1190,28 +1394,43 @@ function SalesManager({
                       <tr
                         key={`${row.username}-${row.name}`}
                       >
-                        <td>{row.name}</td>
+                        <td>
+                          {row.name}
+                        </td>
+
                         <td>
                           {row.username ||
                             '-'}
                         </td>
+
                         <td>
-                          {row.completedWorks}
+                          {
+                            row.completedWorks
+                          }
                         </td>
+
                         <td>
                           {(
                             row.totalSquareFeet ||
                             0
-                          ).toFixed(2)}{' '}
+                          ).toFixed(
+                            2,
+                          )}{' '}
                           sq ft
                         </td>
+
                         <td>
                           <button
                             type="button"
                             className="add-item-button"
                             onClick={() => {
-                              setViewDepartment('printer')
-                              setViewRow(row)
+                              setViewDepartment(
+                                'printer',
+                              )
+
+                              setViewRow(
+                                row,
+                              )
                             }}
                           >
                             View
@@ -1226,6 +1445,7 @@ function SalesManager({
           )}
         </section>
 
+        {/* CUTTING */}
         <section className="department-section">
           <div className="section-heading-row">
             <div>
@@ -1248,14 +1468,22 @@ function SalesManager({
               <table className="items-table">
                 <thead>
                   <tr>
-                    <th>Cutting Staff</th>
-                    <th>Username</th>
+                    <th>
+                      Cutting Staff
+                    </th>
+
+                    <th>
+                      Username
+                    </th>
+
                     <th>
                       Completed Works
                     </th>
+
                     <th>
                       Total Square Feet
                     </th>
+
                     <th>View</th>
                   </tr>
                 </thead>
@@ -1266,28 +1494,43 @@ function SalesManager({
                       <tr
                         key={`${row.username}-${row.name}`}
                       >
-                        <td>{row.name}</td>
+                        <td>
+                          {row.name}
+                        </td>
+
                         <td>
                           {row.username ||
                             '-'}
                         </td>
+
                         <td>
-                          {row.completedWorks}
+                          {
+                            row.completedWorks
+                          }
                         </td>
+
                         <td>
                           {(
                             row.totalSquareFeet ||
                             0
-                          ).toFixed(2)}{' '}
+                          ).toFixed(
+                            2,
+                          )}{' '}
                           sq ft
                         </td>
+
                         <td>
                           <button
                             type="button"
                             className="add-item-button"
                             onClick={() => {
-                              setViewDepartment('printer')
-                              setViewRow(row)
+                              setViewDepartment(
+                                'cutting',
+                              )
+
+                              setViewRow(
+                                row,
+                              )
                             }}
                           >
                             View
@@ -1302,6 +1545,7 @@ function SalesManager({
           )}
         </section>
 
+        {/* PRODUCTION */}
         <section className="department-section">
           <div className="section-heading-row">
             <div>
@@ -1326,10 +1570,15 @@ function SalesManager({
                     <th>
                       Production Staff
                     </th>
-                    <th>Username</th>
+
+                    <th>
+                      Username
+                    </th>
+
                     <th>
                       Completed Works
                     </th>
+
                     <th>View</th>
                   </tr>
                 </thead>
@@ -1340,21 +1589,33 @@ function SalesManager({
                       <tr
                         key={`${row.username}-${row.name}`}
                       >
-                        <td>{row.name}</td>
+                        <td>
+                          {row.name}
+                        </td>
+
                         <td>
                           {row.username ||
                             '-'}
                         </td>
+
                         <td>
-                          {row.completedWorks}
+                          {
+                            row.completedWorks
+                          }
                         </td>
+
                         <td>
                           <button
                             type="button"
                             className="add-item-button"
                             onClick={() => {
-                              setViewDepartment('production')
-                              setViewRow(row)
+                              setViewDepartment(
+                                'production',
+                              )
+
+                              setViewRow(
+                                row,
+                              )
                             }}
                           >
                             View
@@ -1369,199 +1630,408 @@ function SalesManager({
           )}
         </section>
 
-        {viewRow && viewDepartment && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.55)',
-              zIndex: 9999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px',
-            }}
-            onClick={() => {
-              setViewRow(null)
-              setViewDepartment(null)
-            }}
-          >
+        {/* VIEW MODAL */}
+        {viewRow &&
+          viewDepartment && (
             <div
               style={{
-                background: '#fff',
-                borderRadius: '14px',
-                width: 'min(1100px, 96vw)',
-                maxHeight: '90vh',
-                overflowY: 'auto',
-                padding: '24px',
+                position: 'fixed',
+                inset: 0,
+                background:
+                  'rgba(0,0,0,0.55)',
+                zIndex: 9999,
+                display: 'flex',
+                alignItems:
+                  'center',
+                justifyContent:
+                  'center',
+                padding: '20px',
               }}
-              onClick={(event) =>
-                event.stopPropagation()
+              onClick={
+                closeView
               }
             >
               <div
-                className="section-heading-row"
-                style={{ marginBottom: '20px' }}
+                style={{
+                  background:
+                    '#fff',
+                  borderRadius:
+                    '14px',
+                  width:
+                    'min(1100px, 96vw)',
+                  maxHeight:
+                    '90vh',
+                  overflowY:
+                    'auto',
+                  padding:
+                    '24px',
+                }}
+                onClick={(
+                  event,
+                ) =>
+                  event.stopPropagation()
+                }
               >
-                <div>
-                  <h2>
-                    Completed Files — {viewRow.name}
-                  </h2>
-                  <p>
-                    {viewRow.completedWorks} completed file(s)
-                    {viewRow.username
-                      ? ` • ${viewRow.username}`
-                      : ''}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  className="clear-filter-button"
-                  onClick={() => {
-                    setViewRow(null)
-                    setViewDepartment(null)
+                {/* MODAL HEADER */}
+                <div
+                  className="section-heading-row"
+                  style={{
+                    marginBottom:
+                      '20px',
                   }}
                 >
-                  Close
-                </button>
-              </div>
+                  <div>
+                    <h2>
+                      Completed Files
+                      {' — '}
+                      {viewRow.name}
+                    </h2>
 
-              {viewRow.files.length === 0 ? (
-                <div className="empty-items">
-                  No completed files found.
+                    <p>
+                      {
+                        viewRow.completedWorks
+                      }{' '}
+                      completed
+                      file(s)
+
+                      {viewRow.username
+                        ? ` • ${viewRow.username}`
+                        : ''}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="clear-filter-button"
+                    onClick={
+                      closeView
+                    }
+                  >
+                    Close
+                  </button>
                 </div>
-              ) : (
-                viewRow.files.map(
-                  ({ job, completedItems }, fileIndex) => (
-                    <div
-                      key={`${job.source}-${job.id}`}
-                      style={{
-                        border: '1px solid #ddd',
-                        borderRadius: '10px',
-                        padding: '16px',
-                        marginBottom: '14px',
-                      }}
-                    >
+
+                {/* FILES */}
+                {viewRow.files.length ===
+                0 ? (
+                  <div className="empty-items">
+                    No completed
+                    files found.
+                  </div>
+                ) : (
+                  viewRow.files.map(
+                    (
+                      {
+                        job,
+                        completedItems,
+                      },
+                      fileIndex,
+                    ) => (
                       <div
+                        key={`${job.source}-${job.id}`}
                         style={{
-                          display: 'grid',
-                          gridTemplateColumns:
-                            'repeat(auto-fit, minmax(180px, 1fr))',
-                          gap: '10px',
-                          marginBottom: '14px',
+                          border:
+                            '1px solid #ddd',
+                          borderRadius:
+                            '10px',
+                          padding:
+                            '16px',
+                          marginBottom:
+                            '14px',
                         }}
                       >
-                        <div>
-                          <strong>File {fileIndex + 1}</strong>
-                        </div>
+                        {/* FILE INFO */}
+                        <div
+                          style={{
+                            display:
+                              'grid',
+                            gridTemplateColumns:
+                              'repeat(auto-fit, minmax(180px, 1fr))',
+                            gap: '10px',
+                            marginBottom:
+                              '14px',
+                          }}
+                        >
+                          <div>
+                            <strong>
+                              File{' '}
+                              {fileIndex +
+                                1}
+                            </strong>
+                          </div>
 
-                        <div>
-                          <strong>Job ID:</strong>{' '}
-                          {job.orderId}
-                        </div>
+                          <div>
+                            <strong>
+                              Job ID:
+                            </strong>{' '}
+                            {
+                              job.orderId
+                            }
+                          </div>
 
-                        <div>
-                          <strong>Customer:</strong>{' '}
-                          {job.customer.name || '-'}
-                        </div>
+                          <div>
+                            <strong>
+                              Customer:
+                            </strong>{' '}
+                            {
+                              job
+                                .customer
+                                .name ||
+                              '-'
+                            }
+                          </div>
 
-                        <div>
-                          <strong>Company:</strong>{' '}
-                          {job.customer.companyName || '-'}
-                        </div>
+                          <div>
+                            <strong>
+                              Company:
+                            </strong>{' '}
+                            {
+                              job
+                                .customer
+                                .companyName ||
+                              '-'
+                            }
+                          </div>
 
-                        <div>
-                          <strong>Entry Date:</strong>{' '}
-                          {formatDate(job.date)}
-                        </div>
-
-                        <div>
-                          <strong>Branch:</strong>{' '}
-                          {job.branch || '-'}
-                        </div>
-                      </div>
-
-                      <div className="items-table-wrapper">
-                        <table className="items-table">
-                          <thead>
-                            <tr>
-                              <th>Job ID</th>
-                              <th>Customer</th>
-                              <th>Item</th>
-                              <th>Size</th>
-                              <th>Qty</th>
-                              <th>Design Charge</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {completedItems.length === 0 ? (
-                              <tr>
-                                <td colSpan={6}>
-                                  No non-NA items in this file.
-                                </td>
-                              </tr>
-                            ) : (
-                              completedItems.map(
-                                (item, itemIndex) => (
-                                  <tr
-                                    key={`${job.id}-${itemIndex}`}
-                                  >
-                                    {itemIndex === 0 && (
-                                      <td rowSpan={completedItems.length}>
-                                        {job.orderId || job.id}
-                                      </td>
-                                    )}
-
-                                    {itemIndex === 0 && (
-                                      <td rowSpan={completedItems.length}>
-                                        {job.customer.name || '-'}
-                                      </td>
-                                    )}
-
-                                    <td>
-                                      {item.name || '-'}
-                                    </td>
-                                    <td>
-                                      {item.width || '-'} ×{' '}
-                                      {item.height || '-'}
-                                    </td>
-                                    <td>
-                                      {item.qty || '-'}
-                                    </td>
-
-                                    {itemIndex === 0 && (
-                                      <td rowSpan={completedItems.length}>
-                                        ₹{Number(job.designCharge || 0).toFixed(2)}
-                                      </td>
-                                    )}
-                                  </tr>
-                                ),
-                              )
+                          <div>
+                            <strong>
+                              Entry Date:
+                            </strong>{' '}
+                            {formatDate(
+                              job.date,
                             )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ),
-                )
-              )}
-            </div>
-          </div>
-        )}
+                          </div>
 
+                          <div>
+                            <strong>
+                              Branch:
+                            </strong>{' '}
+                            {job.branch ||
+                              '-'}
+                          </div>
+                        </div>
+
+                        {/* DEPARTMENT-SPECIFIC TABLE */}
+                        <div className="items-table-wrapper">
+                          <table className="items-table">
+
+                            <thead>
+                              <tr>
+                                <th>
+                                  Job ID
+                                </th>
+
+                                <th>
+                                  Customer
+                                </th>
+
+                                <th>
+                                  Item
+                                </th>
+
+                                <th>
+                                  Size
+                                </th>
+
+                                <th>
+                                  Qty
+                                </th>
+
+                                {viewDepartment ===
+                                  'designer' && (
+                                  <th>
+                                    Design Charge
+                                  </th>
+                                )}
+
+                                {(viewDepartment ===
+                                  'printer' ||
+                                  viewDepartment ===
+                                    'cutting') && (
+                                  <th>
+                                    Total Square Feet
+                                  </th>
+                                )}
+
+                                {viewDepartment ===
+                                  'production' && (
+                                  <th>
+                                    Remarks
+                                  </th>
+                                )}
+                              </tr>
+                            </thead>
+
+                            <tbody>
+                              {completedItems.length ===
+                              0 ? (
+                                <tr>
+                                  <td
+                                    colSpan={
+                                      6
+                                    }
+                                  >
+                                    No non-NA
+                                    items in
+                                    this file.
+                                  </td>
+                                </tr>
+                              ) : (
+                                completedItems.map(
+                                  (
+                                    item,
+                                    itemIndex,
+                                  ) => (
+                                    <tr
+                                      key={`${job.id}-${itemIndex}`}
+                                    >
+                                      {/* JOB ID */}
+                                      {itemIndex ===
+                                        0 && (
+                                        <td
+                                          rowSpan={
+                                            completedItems.length
+                                          }
+                                        >
+                                          {
+                                            job.orderId
+                                          }
+                                        </td>
+                                      )}
+
+                                      {/* CUSTOMER */}
+                                      {itemIndex ===
+                                        0 && (
+                                        <td
+                                          rowSpan={
+                                            completedItems.length
+                                          }
+                                        >
+                                          {
+                                            job
+                                              .customer
+                                              .name
+                                          }
+                                        </td>
+                                      )}
+
+                                      {/* ITEM */}
+                                      <td>
+                                        {item.name ||
+                                          '-'}
+                                      </td>
+
+                                      {/* SIZE */}
+                                      <td>
+                                        {item.width ||
+                                          '-'}{' '}
+                                        ×{' '}
+                                        {item.height ||
+                                          '-'}
+                                      </td>
+
+                                      {/* QTY */}
+                                      <td>
+                                        {item.qty ||
+                                          '-'}
+                                      </td>
+
+                                      {/* DESIGNER */}
+                                      {viewDepartment ===
+                                        'designer' &&
+                                        itemIndex ===
+                                          0 && (
+                                          <td
+                                            rowSpan={
+                                              completedItems.length
+                                            }
+                                          >
+                                            ₹
+                                            {Number(
+                                              job.designCharge ||
+                                                0,
+                                            ).toFixed(
+                                              2,
+                                            )}
+                                          </td>
+                                        )}
+
+                                      {/* PRINTER */}
+                                      {viewDepartment ===
+                                        'printer' &&
+                                        itemIndex ===
+                                          0 && (
+                                          <td
+                                            rowSpan={
+                                              completedItems.length
+                                            }
+                                          >
+                                            {getSquareFeet(
+                                              job.items,
+                                            ).toFixed(
+                                              2,
+                                            )}{' '}
+                                            sq ft
+                                          </td>
+                                        )}
+
+                                      {/* CUTTING */}
+                                      {viewDepartment ===
+                                        'cutting' &&
+                                        itemIndex ===
+                                          0 && (
+                                          <td
+                                            rowSpan={
+                                              completedItems.length
+                                            }
+                                          >
+                                            {getSquareFeet(
+                                              job.items,
+                                            ).toFixed(
+                                              2,
+                                            )}{' '}
+                                            sq ft
+                                          </td>
+                                        )}
+
+                                      {/* PRODUCTION */}
+                                      {viewDepartment ===
+                                        'production' && (
+                                        <td>
+                                          {item.remarks ||
+                                            '-'}
+                                        </td>
+                                      )}
+                                    </tr>
+                                  ),
+                                )
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ),
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+        {/* DATA SOURCE */}
         <section className="department-section">
           <div className="section-heading-row">
             <div>
-              <h2>Data Source</h2>
+              <h2>
+                Data Source
+              </h2>
 
               <p>
-                This dashboard uses the same
-                field structure as the Sales
-                page and listens to Firestore
-                in real time. Use View on any
-                staff row to see that person's
-                completed files and non-NA items.
+                This dashboard uses the
+                same field structure as the
+                Sales page and listens to
+                Firestore in real time. Use
+                View on any staff row to see
+                that person's completed files.
               </p>
             </div>
           </div>
@@ -1591,7 +2061,9 @@ function SalesManager({
 
             <span>
               In selected range:{' '}
-              {jobsInRange.length}
+              {
+                jobsInRange.length
+              }
             </span>
           </div>
         </section>
