@@ -79,16 +79,28 @@ const BRANCHES = [
 const getTodayDate = () => {
   const now = new Date()
 
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
+  // Always calculate the application date in IST.
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
 
-  return `${year}-${month}-${day}`
+  return formatter.format(now)
 }
 
 /*
 =========================================================
  FORMAT TIME
+=========================================================
+
+IMPORTANT:
+Firestore Timestamp stores an absolute point in time.
+
+We explicitly display it in Asia/Kolkata so that the
+AM/PM value does not change based on the browser/device
+timezone.
 =========================================================
 */
 
@@ -97,10 +109,12 @@ const formatTime = (timestamp: Timestamp | null) => {
     return '-'
   }
 
-  return timestamp.toDate().toLocaleTimeString([], {
+  return timestamp.toDate().toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    hour12: true,
   })
 }
 
@@ -286,8 +300,6 @@ function Attendance() {
   LOAD DAILY ATTENDANCE
   =======================================================
 
-  IMPORTANT DATA MODEL:
-
   Collection:
     duty_sessions
 
@@ -296,26 +308,6 @@ function Attendance() {
 
   Daily data:
     dailySessions.<YYYY-MM-DD>
-
-  Example:
-
-  duty_sessions
-    / username
-        dailySessions: {
-          "2026-09-17": {
-            date: "2026-09-17",
-            startTime: Timestamp,
-            endTime: Timestamp,
-            branch: "Kalpetta",
-            totalWorkedSeconds: 36000,
-            totalSessions: 1
-          }
-        }
-
-  We intentionally read the duty_sessions collection and select
-  the requested date from each user's dailySessions map. This is
-  necessary because the date is a dynamic map key and is not a
-  top-level Firestore field.
   */
 
   useEffect(() => {
@@ -344,6 +336,7 @@ function Attendance() {
           Use it only when it belongs to the selected date and there
           is no new dailySessions record for that date.
           */
+
           if (!dailyRecord && duty.dutyDate === selectedDate) {
             dailyRecord = {
               date: selectedDate,
@@ -353,7 +346,9 @@ function Attendance() {
               totalWorkedSeconds: Number(
                 duty.totalWorkedSeconds || 0,
               ),
-              totalSessions: Number(duty.totalSessions || 0),
+              totalSessions: Number(
+                duty.totalSessions || 0,
+              ),
             }
           }
 
@@ -361,6 +356,7 @@ function Attendance() {
           No record for the selected day means the employee did not
           start duty on that day. Do not display another day's duty.
           */
+
           if (!dailyRecord) {
             return
           }
@@ -381,7 +377,9 @@ function Attendance() {
               duty.username ||
               document.id,
 
-            date: dailyRecord.date || selectedDate,
+            date:
+              dailyRecord.date ||
+              selectedDate,
 
             branch:
               dailyRecord.branch ||
@@ -475,9 +473,10 @@ function Attendance() {
 
         return true
       })
-      .filter((record) =>
-        record.totalWorkedSeconds >
-        10 * 60 * 60 + 40 * 60,
+      .filter(
+        (record) =>
+          record.totalWorkedSeconds >
+          10 * 60 * 60 + 40 * 60,
       )
       .sort(
         (a, b) =>
@@ -607,7 +606,9 @@ function Attendance() {
                 </tr>
               ) : (
                 displayRecords.map((record) => (
-                  <tr key={`${record.username}-${record.date}`}>
+                  <tr
+                    key={`${record.username}-${record.date}`}
+                  >
                     <td>
                       <strong>{record.name}</strong>
                     </td>
@@ -663,40 +664,48 @@ function Attendance() {
           <table className="branch-table">
             <thead>
               <tr>
-                {Object.keys(branchMembers).map((branch) => (
-                  <th key={branch}>{branch}</th>
-                ))}
+                {Object.keys(branchMembers).map(
+                  (branch) => (
+                    <th key={branch}>
+                      {branch}
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
 
             <tbody>
               <tr>
-                {Object.keys(branchMembers).map((branch) => (
-                  <td key={branch}>
-                    {branchMembers[branch].length === 0 ? (
-                      <span className="no-member">
-                        No active members
-                      </span>
-                    ) : (
-                      <div className="member-list">
-                        {branchMembers[branch].map(
-                          (member, index) => (
-                            <div
-                              className="member-item"
-                              key={member}
-                            >
-                              <span className="member-number">
-                                {index + 1}
-                              </span>
+                {Object.keys(branchMembers).map(
+                  (branch) => (
+                    <td key={branch}>
+                      {branchMembers[branch].length === 0 ? (
+                        <span className="no-member">
+                          No active members
+                        </span>
+                      ) : (
+                        <div className="member-list">
+                          {branchMembers[branch].map(
+                            (member, index) => (
+                              <div
+                                className="member-item"
+                                key={member}
+                              >
+                                <span className="member-number">
+                                  {index + 1}
+                                </span>
 
-                              <span>{member}</span>
-                            </div>
-                          ),
-                        )}
-                      </div>
-                    )}
-                  </td>
-                ))}
+                                <span>
+                                  {member}
+                                </span>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  ),
+                )}
               </tr>
             </tbody>
           </table>
@@ -712,18 +721,30 @@ function Attendance() {
         <div className="section-heading">
           <div>
             <h2>Overtime Works</h2>
-            <span>Employees working more than 10:40:00</span>
+
+            <span>
+              Employees working more than 10:40:00
+            </span>
           </div>
 
           <div className="employee-filter">
             <label>Employee</label>
+
             <select
               value={selectedEmployee}
-              onChange={(event) => setSelectedEmployee(event.target.value)}
+              onChange={(event) =>
+                setSelectedEmployee(event.target.value)
+              }
             >
-              <option value="ALL">All Employees</option>
+              <option value="ALL">
+                All Employees
+              </option>
+
               {employeeList.map((name) => (
-                <option key={name} value={name}>
+                <option
+                  key={name}
+                  value={name}
+                >
                   {name}
                 </option>
               ))}
@@ -748,36 +769,67 @@ function Attendance() {
             <tbody>
               {overtimeRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="empty-row">
+                  <td
+                    colSpan={7}
+                    className="empty-row"
+                  >
                     No overtime work found.
                   </td>
                 </tr>
               ) : (
                 overtimeRecords.map((record) => {
-                  const overtime = calculateOT(record.totalWorkedSeconds)
-                  const otClass = overtime === 1
-                    ? 'ot-badge ot-full'
-                    : 'ot-badge ot-half'
-                  const otLabel = overtime === 1
-                    ? '1 OT'
-                    : overtime === 0.5
-                      ? '0.5 OT'
-                      : '0 OT'
+                  const overtime = calculateOT(
+                    record.totalWorkedSeconds,
+                  )
+
+                  const otClass =
+                    overtime === 1
+                      ? 'ot-badge ot-full'
+                      : 'ot-badge ot-half'
+
+                  const otLabel =
+                    overtime === 1
+                      ? '1 OT'
+                      : overtime === 0.5
+                        ? '0.5 OT'
+                        : '0 OT'
 
                   return (
                     <tr key={record.username}>
-                      <td><strong>{record.name}</strong></td>
-                      <td>{formatDate(record.date)}</td>
-                      <td>{record.branch}</td>
-                      <td>{formatTime(record.inTime)}</td>
-                      <td>{formatTime(record.outTime)}</td>
                       <td>
                         <strong>
-                          {formatDuration(record.totalWorkedSeconds)}
+                          {record.name}
                         </strong>
                       </td>
+
                       <td>
-                        <span className={otClass}>{otLabel}</span>
+                        {formatDate(record.date)}
+                      </td>
+
+                      <td>
+                        {record.branch}
+                      </td>
+
+                      <td>
+                        {formatTime(record.inTime)}
+                      </td>
+
+                      <td>
+                        {formatTime(record.outTime)}
+                      </td>
+
+                      <td>
+                        <strong>
+                          {formatDuration(
+                            record.totalWorkedSeconds,
+                          )}
+                        </strong>
+                      </td>
+
+                      <td>
+                        <span className={otClass}>
+                          {otLabel}
+                        </span>
                       </td>
                     </tr>
                   )
@@ -789,12 +841,27 @@ function Attendance() {
 
         <div className="ot-rule-box">
           <strong>Overtime Calculation</strong>
+
           <div className="ot-rules">
-            <span>10:00:00 = Full Day</span>
-            <span>05:00:00 = Half Day</span>
-            <span>+25 to 40 min = 0.5 OT</span>
-            <span>More than +40 min = 1 OT</span>
-            <span>Less than required = 0 OT</span>
+            <span>
+              10:00:00 = Full Day
+            </span>
+
+            <span>
+              05:00:00 = Half Day
+            </span>
+
+            <span>
+              +25 to 40 min = 0.5 OT
+            </span>
+
+            <span>
+              More than +40 min = 1 OT
+            </span>
+
+            <span>
+              Less than required = 0 OT
+            </span>
           </div>
         </div>
       </section>
