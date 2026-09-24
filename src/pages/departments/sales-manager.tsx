@@ -5,6 +5,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  Timestamp,
 } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../../firebase'
@@ -104,6 +105,11 @@ interface JobRecord {
   }
 
   designCharge: number
+  designFinishedAt?: Timestamp
+  designFinishedBy?: {
+    name?: string
+    username?: string
+  }
   delivered: boolean
 }
 
@@ -400,6 +406,23 @@ const createJobRecord = (
       data?.designCharge,
     ),
 
+    designFinishedAt:
+      data?.designFinishedAt instanceof Timestamp
+        ? data.designFinishedAt
+        : undefined,
+
+    designFinishedBy:
+      data?.designFinishedBy
+        ? {
+            name: getString(
+              data.designFinishedBy?.name,
+            ),
+            username: getString(
+              data.designFinishedBy?.username,
+            ),
+          }
+        : undefined,
+
     delivered:
       data?.delivered === true,
   }
@@ -683,6 +706,65 @@ function SalesManager({
   /*
    * DESIGNER
    */
+  /*
+   * DESIGNER
+   *
+   * Designer performance is filtered by the
+   * exact designFinishedAt timestamp saved when
+   * Finish Design was pressed.
+   *
+   * This is intentionally different from the
+   * general jobsInRange filter, which uses the
+   * original job/measurement date.
+   */
+  const designerJobsInRange =
+    useMemo(() => {
+      if (!validRange) {
+        return []
+      }
+
+      return jobs.filter((job) => {
+        if (
+          !job.designFinishedAt ||
+          !job.designFinishedAt.toDate
+        ) {
+          return false
+        }
+
+        const finishedDate =
+          job.designFinishedAt
+            .toDate()
+
+        const year =
+          finishedDate.getFullYear()
+
+        const month =
+          String(
+            finishedDate.getMonth() + 1,
+          ).padStart(2, '0')
+
+        const day =
+          String(
+            finishedDate.getDate(),
+          ).padStart(2, '0')
+
+        const finishedDateKey =
+          `${year}-${month}-${day}`
+
+        return (
+          finishedDateKey >=
+            dateFrom &&
+          finishedDateKey <=
+            dateTo
+        )
+      })
+    }, [
+      jobs,
+      dateFrom,
+      dateTo,
+      validRange,
+    ])
+
   const designerRows =
     useMemo<
       DepartmentRowWithFiles[]
@@ -693,7 +775,7 @@ function SalesManager({
           DepartmentRowWithFiles
         >()
 
-      jobsInRange.forEach(
+      designerJobsInRange.forEach(
         (job) => {
           if (
             !job.officeInfo
@@ -765,7 +847,7 @@ function SalesManager({
           map.values(),
         ),
       )
-    }, [jobsInRange])
+    }, [designerJobsInRange])
 
   /*
    * PRINTER
@@ -1268,7 +1350,9 @@ function SalesManager({
               <p>
                 Designer name, completed
                 works and total design
-                charge.
+                charge. Date range is based on
+                the exact Design Finished
+                timestamp.
               </p>
             </div>
           </div>
@@ -1801,6 +1885,46 @@ function SalesManager({
                               job.date,
                             )}
                           </div>
+
+                          {viewDepartment ===
+                            'designer' && (
+                            <>
+                              <div>
+                                <strong>
+                                  Design Finished:
+                                </strong>{' '}
+                                {job.designFinishedAt
+                                  ? job.designFinishedAt
+                                      .toDate()
+                                      .toLocaleString(
+                                        'en-IN',
+                                        {
+                                          day: '2-digit',
+                                          month: 'short',
+                                          year: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          second: '2-digit',
+                                        },
+                                      )
+                                  : '-'}
+                              </div>
+
+                              <div>
+                                <strong>
+                                  Finished By:
+                                </strong>{' '}
+                                {getDisplayName(
+                                  job
+                                    .designFinishedBy
+                                    ?.name,
+                                  job
+                                    .designFinishedBy
+                                    ?.username,
+                                )}
+                              </div>
+                            </>
+                          )}
 
                           <div>
                             <strong>

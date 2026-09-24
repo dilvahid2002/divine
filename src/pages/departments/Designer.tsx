@@ -103,6 +103,13 @@ interface UnifiedDesignJob {
 
   designCharge?: number
 
+  designFinishedAt?: Timestamp
+
+  designFinishedBy?: {
+    name: string
+    username: string
+  }
+
   delivered?: boolean
 
   createdAt?: Timestamp
@@ -378,6 +385,23 @@ const normalizeJobOrder = (
         ? data.designCharge
         : undefined,
 
+    designFinishedAt:
+      data.designFinishedAt,
+
+    designFinishedBy:
+      data.designFinishedBy
+        ? {
+            name:
+              getString(
+                data.designFinishedBy?.name,
+              ),
+            username:
+              getString(
+                data.designFinishedBy?.username,
+              ),
+          }
+        : undefined,
+
     delivered:
       data.delivered ??
       false,
@@ -636,6 +660,23 @@ const normalizeMeasurement = (
       typeof data.designCharge ===
       'number'
         ? data.designCharge
+        : undefined,
+
+    designFinishedAt:
+      data.designFinishedAt,
+
+    designFinishedBy:
+      data.designFinishedBy
+        ? {
+            name:
+              getString(
+                data.designFinishedBy?.name,
+              ),
+            username:
+              getString(
+                data.designFinishedBy?.username,
+              ),
+          }
         : undefined,
 
     createdAt:
@@ -1538,6 +1579,9 @@ function Designer({
          * BOTH Job Orders and Measurements.
          */
 
+        const finishedAt =
+          Timestamp.now()
+
         const updateData:
           Record<string, unknown> = {
           items:
@@ -1554,6 +1598,16 @@ function Designer({
 
           designCharge:
             charge,
+
+          designFinishedAt:
+            finishedAt,
+
+          designFinishedBy: {
+            name:
+              currentUser.name,
+            username:
+              currentUser.username,
+          },
         }
 
         await updateDoc(
@@ -2381,6 +2435,32 @@ function Designer({
                                 </div>
                               )}
 
+                              {order.designFinishedAt && (
+                                <div>
+                                  <strong>
+                                    Design Finished At
+                                  </strong>
+
+                                  <span>
+                                    {order.designFinishedAt
+                                      .toDate()
+                                      .toLocaleString()}
+                                  </span>
+                                </div>
+                              )}
+
+                              {order.designFinishedBy && (
+                                <div>
+                                  <strong>
+                                    Design Finished By
+                                  </strong>
+
+                                  <span>
+                                    {order.designFinishedBy.name || '-'}
+                                  </span>
+                                </div>
+                              )}
+
                             </div>
 
                             {/* =================================
@@ -2858,4 +2938,3 @@ function Designer({
 }
 
 export default Designer
-
