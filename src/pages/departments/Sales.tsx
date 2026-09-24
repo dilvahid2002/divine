@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
   orderBy,
@@ -949,6 +950,112 @@ function Sales({ user }: SalesProps) {
         )
       }
     }
+
+  // =========================================
+  // RESEND TO DESIGN
+  // =========================================
+
+  const handleResendToDesign = async () => {
+    if (!editingOrder) {
+      return
+    }
+
+    if (!editingOrder.officeInfo.designJob) {
+      window.alert(
+        'Design department is not selected for this job.',
+      )
+      return
+    }
+
+    if (
+      editingOrder.statuses?.design !==
+      'Finished'
+    ) {
+      window.alert(
+        'This job can be resent only after the design is finished.',
+      )
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Resend this finished job to Design? The current designer assignment and design completion status will be reset so a designer can accept it again.',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      const orderRef = doc(
+        db,
+        'job_orders',
+        editingOrder.id,
+      )
+
+      /*
+       * Reset every item's design status.
+       *
+       * This is important because Designer prevents
+       * another designer from accepting work when an
+       * item is already marked finished/NA.
+       */
+      const resetItems = editingOrder.items.map(
+        (item) => ({
+          ...item,
+          designStatus: 'pending',
+        }),
+      )
+
+      await updateDoc(orderRef, {
+        items: resetItems,
+
+        'statuses.design': 'Pending',
+
+        'officeInfo.designer':
+          deleteField(),
+
+        'officeInfo.designerUsername':
+          deleteField(),
+
+        /*
+         * The previous completion timestamp must be
+         * removed so Sales Manager does not count this
+         * old completion as a new finished design.
+         */
+        designFinishedAt:
+          deleteField(),
+
+        designFinishedBy:
+          deleteField(),
+
+        /*
+         * Keep a record that Sales resent the design.
+         */
+        designResentAt:
+          Timestamp.now(),
+
+        designResentBy: {
+          name: user.name,
+          username: user.username,
+        },
+
+        updatedAt:
+          Timestamp.now(),
+      })
+
+      setEditingOrder(null)
+      setError('')
+    } catch (resendError) {
+      console.error(
+        'Error resending job to design:',
+        resendError,
+      )
+
+      setError(
+        'Unable to resend the job to Design.',
+      )
+    }
+  }
 
   // =========================================
   // SAVE EDIT
@@ -3424,6 +3531,19 @@ function Sales({ user }: SalesProps) {
             ================================== */}
 
             <div className="form-actions">
+
+              {editingOrder.officeInfo.designJob &&
+                editingOrder.statuses?.design ===
+                  'Finished' && (
+                  <button
+                    type="button"
+                    className="cancel-button"
+                    onClick={handleResendToDesign}
+                    title="Send this finished design back to the Designer"
+                  >
+                    ↻ Resend to Design
+                  </button>
+                )}
 
               <button
                 type="button"
