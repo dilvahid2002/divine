@@ -1,5 +1,8 @@
   import { useEffect, useState } from 'react'
-  import { useNavigate } from 'react-router-dom'
+  import {
+  useLocation,
+  useNavigate,
+} from 'react-router-dom'
   import {
     collection,
     doc,
@@ -12,7 +15,15 @@
   import { db } from '../../firebase'
   import './Department.css'
 
-  interface JobOrderProps {
+  interface JobOrderLocationState {
+  leadId?: string
+  customerName?: string
+  phoneNumber?: string
+  place?: string
+  branch?: Branch
+}
+
+interface JobOrderProps {
     user: {
       name: string
       username: string
@@ -49,6 +60,9 @@
 
   function JobOrder({ user }: JobOrderProps) {
     const navigate = useNavigate()
+    const location = useLocation()
+    const locationState =
+      (location.state ?? {}) as JobOrderLocationState
 
     /* =========================================
       BRANCH
@@ -163,6 +177,41 @@
 
       setDate(formattedDate)
     }, [])
+
+    /* =========================================
+      PREFILL CUSTOMER FROM LEAD
+    ========================================== */
+
+    useEffect(() => {
+      if (!locationState.customerName &&
+          !locationState.phoneNumber &&
+          !locationState.place &&
+          !locationState.branch) {
+        return
+      }
+
+      if (locationState.customerName) {
+        setCustomerName(locationState.customerName)
+      }
+
+      if (locationState.phoneNumber) {
+        setPhoneNumber(locationState.phoneNumber)
+        setWhatsappNumber(locationState.phoneNumber)
+      }
+
+      if (locationState.place) {
+        setPlace(locationState.place)
+      }
+
+      if (locationState.branch) {
+        setBranch(locationState.branch)
+      }
+    }, [
+      locationState.customerName,
+      locationState.phoneNumber,
+      locationState.place,
+      locationState.branch,
+    ])
 
 
     /* =========================================
@@ -863,7 +912,13 @@
             >
               ← Back to Sales
             </button>
-
+              <button
+            type="button"
+            className="measurement-go-home-button"
+            onClick={() => navigate('/')}
+          >
+            ← Go to Home
+          </button>
           </div>
 
 

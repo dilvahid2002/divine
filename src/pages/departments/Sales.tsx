@@ -1588,6 +1588,32 @@ function Sales({ user }: SalesProps) {
             + Measurement
           </button>
 
+            <button
+              type="button"
+              className="add-item-button"
+              onClick={() =>
+                navigate(
+                  '/departments/leads',
+                )
+              }
+            >
+              +Leads
+            </button>
+
+
+            <button
+              type="button"
+              className="add-item-button"
+              onClick={() =>
+                navigate(
+                  '/departments/MeasurementSchedule',
+                )
+              }
+            >
+              Measurement Schedule
+            </button>
+
+
         </div>
 
         {/* =====================================

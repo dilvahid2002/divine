@@ -4,9 +4,31 @@ import {
   doc,
   runTransaction,
   Timestamp,
+  updateDoc,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './Department.css'
+
+type Branch =
+  | 'Kalpetta'
+  | 'Kondotty'
+  | 'Sulthan Bathery'
+
+const BRANCHES: Branch[] = [
+  'Kalpetta',
+  'Kondotty',
+  'Sulthan Bathery',
+]
+
+interface MeasurementLocationState {
+  leadId?: string
+  customerName?: string
+  phoneNumber?: string
+  place?: string
+  branch?: Branch
+  scheduleId?: string
+}
 
 interface MeasurementProps {
   user: {
@@ -30,6 +52,11 @@ interface Item {
 function Measurement({
   user,
 }: MeasurementProps) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const locationState =
+    (location.state ?? {}) as MeasurementLocationState
+
   const [date, setDate] = useState('')
 
   const [customerName, setCustomerName] =
@@ -45,6 +72,9 @@ function Measurement({
     useState('')
 
   const [place, setPlace] = useState('')
+
+  const [branch, setBranch] =
+    useState<Branch | ''>('')
 
   const [items, setItems] =
     useState<Item[]>([])
@@ -92,6 +122,34 @@ function Measurement({
 
     setDate(formattedDate)
   }, [])
+
+  // =========================================
+  // PREFILL CUSTOMER FROM LEAD
+  // =========================================
+
+  useEffect(() => {
+    if (locationState.customerName) {
+      setCustomerName(locationState.customerName)
+    }
+
+    if (locationState.phoneNumber) {
+      setPhoneNumber(locationState.phoneNumber)
+      setWhatsappNumber(locationState.phoneNumber)
+    }
+
+    if (locationState.place) {
+      setPlace(locationState.place)
+    }
+
+    if (locationState.branch) {
+      setBranch(locationState.branch)
+    }
+  }, [
+    locationState.customerName,
+    locationState.phoneNumber,
+    locationState.place,
+    locationState.branch,
+  ])
 
   // =========================================
   // ADD ITEM
@@ -547,6 +605,8 @@ function Measurement({
 
                 place:
                   place.trim(),
+
+                branch,
               },
 
               // =================================
@@ -596,6 +656,29 @@ function Measurement({
             return generatedId
           },
         )
+
+      // =====================================
+      // LINK MEASUREMENT TO SCHEDULE
+      // =====================================
+
+      // When this measurement was opened from the
+      // Measurement Schedule page, save the generated
+      // measurement number back onto that schedule.
+      if (locationState.scheduleId) {
+        await updateDoc(
+          doc(
+            db,
+            'measurementSchedules',
+            locationState.scheduleId,
+          ),
+          {
+            measurementId,
+            status: 'Measurement Completed',
+            measurementCompletedAt:
+              Timestamp.now(),
+          },
+        )
+      }
 
       // =====================================
       // RESET FORM
@@ -657,7 +740,7 @@ function Measurement({
             HEADER
         ====================================== */}
 
-        <div className="department-header">
+        <div className="department-header measurement-page-header">
 
           <div>
 
@@ -670,6 +753,14 @@ function Measurement({
             </p>
 
           </div>
+
+          <button
+            type="button"
+            className="measurement-go-home-button"
+            onClick={() => navigate('/')}
+          >
+            ← Go to Home
+          </button>
 
         </div>
 
@@ -818,6 +909,39 @@ function Measurement({
 
               </div>
 
+              {/* BRANCH */}
+
+              <div className="input-group">
+
+                <label htmlFor="measurement-branch">
+                  Branch
+                </label>
+
+                <select
+                  id="measurement-branch"
+                  value={branch}
+                  onChange={(event) =>
+                    setBranch(
+                      event.target.value as Branch | '',
+                    )
+                  }
+                >
+                  <option value="">
+                    Select branch
+                  </option>
+
+                  {BRANCHES.map((branchOption) => (
+                    <option
+                      key={branchOption}
+                      value={branchOption}
+                    >
+                      {branchOption}
+                    </option>
+                  ))}
+                </select>
+
+              </div>
+
             </div>
 
           </section>
@@ -923,7 +1047,8 @@ function Measurement({
                           key={item.slNo}
                         >
 
-                          {/* SL NO */}
+            
+              {/* SL NO */}
 
                           <td className="sl-number">
 

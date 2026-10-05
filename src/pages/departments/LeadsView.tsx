@@ -965,41 +965,19 @@ function LeadsView({
     /*
      * MEASUREMENT
      *
-     * Create a NEW measurement schedule
-     * before navigating.
+     * Open the Measurement entry page and
+     * carry the selected lead information with it.
      */
     if (
       status === 'Measurement'
     ) {
 
-      try {
-
-        const scheduleId =
-          await createMeasurementSchedule(
-            lead,
-          )
-
-        navigate(
-          '/departments/measurement-schedule',
-          {
-            state: {
-              ...navigationState,
-              scheduleId,
-            },
-          },
-        )
-
-      } catch (firebaseError) {
-
-        console.error(
-          'Error creating measurement schedule:',
-          firebaseError,
-        )
-
-        alert(
-          'Unable to create the measurement schedule.',
-        )
-      }
+      navigate(
+        '/departments/measurement',
+        {
+          state: navigationState,
+        },
+      )
 
       return
     }
@@ -1017,7 +995,7 @@ function LeadsView({
     ) {
 
       navigate(
-        '/departments/measurement-schedule',
+        '/departments/measurement-scheduler',
         {
           state:
             navigationState,
@@ -2305,8 +2283,17 @@ function LeadsView({
 
                               {savingStatus ===
                               lead.id
-                                ? 'Creating Schedule...'
-                                : 'Update Status'}
+                                ? 'Opening...'
+                                : selectedStatus[lead.id] ===
+                                    'Measurement'
+                                  ? 'Open Measurement'
+                                  : selectedStatus[lead.id] ===
+                                      'Measurement Schedule'
+                                    ? 'Open Measurement Schedule'
+                                    : selectedStatus[lead.id] ===
+                                        'Job Order'
+                                      ? 'Open Job Order'
+                                      : 'Update Status'}
 
                             </button>
 

@@ -4,11 +4,14 @@
   useState,
 } from 'react'
 import {
+  addDoc,
   collection,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   Timestamp,
+  where,
 } from 'firebase/firestore'
 import {
   useLocation,
@@ -51,6 +54,7 @@ interface MeasurementScheduleRecord {
   measurementTime?: string
   assignedTo?: string
   remarks?: string
+  measurementId?: string
 }
 
 interface LocationState {
@@ -113,6 +117,21 @@ function MeasurementSchedule({
   const [error, setError] =
     useState('')
 
+  const [scheduleDate, setScheduleDate] =
+    useState('')
+
+  const [scheduleTime, setScheduleTime] =
+    useState('')
+
+  const [assignedTo, setAssignedTo] =
+    useState('')
+
+  const [scheduleRemarks, setScheduleRemarks] =
+    useState('')
+
+  const [savingSchedule, setSavingSchedule] =
+    useState(false)
+
   useEffect(() => {
     setLoading(true)
     setError('')
@@ -159,6 +178,80 @@ function MeasurementSchedule({
     return unsubscribe
   }, [])
 
+  useEffect(() => {
+    if (!locationState.customerName) {
+      return
+    }
+
+    setScheduleDate((current) =>
+      current ||
+      new Date().toISOString().split('T')[0],
+    )
+  }, [locationState.customerName])
+
+  const handleCreateSchedule = async () => {
+    if (!locationState.leadId) {
+      setError('No lead was supplied for this measurement schedule.')
+      return
+    }
+
+    if (!scheduleDate) {
+      setError('Please select a measurement date.')
+      return
+    }
+
+    setSavingSchedule(true)
+    setError('')
+
+    try {
+      const existingQuery = query(
+        collection(db, 'measurementSchedules'),
+        where('leadId', '==', locationState.leadId),
+      )
+
+      const existingSnapshot = await getDocs(existingQuery)
+
+      if (!existingSnapshot.empty) {
+        setError('A measurement schedule already exists for this lead.')
+        setSavingSchedule(false)
+        return
+      }
+
+      await addDoc(
+        collection(db, 'measurementSchedules'),
+        {
+          leadId: locationState.leadId,
+          customerName: locationState.customerName || '',
+          phoneNumber: locationState.phoneNumber || '',
+          place: locationState.place || '',
+          branch: locationState.branch || '',
+          status: 'Scheduled',
+          measurementDate: scheduleDate,
+          measurementTime: scheduleTime,
+          assignedTo: assignedTo.trim(),
+          remarks: scheduleRemarks.trim(),
+          createdAt: Timestamp.now(),
+          createdBy: {
+            name: user.name,
+            username: user.username,
+          },
+        },
+      )
+
+      setScheduleRemarks('')
+      setScheduleTime('')
+      setAssignedTo('')
+    } catch (scheduleError) {
+      console.error(
+        'Error creating measurement schedule:',
+        scheduleError,
+      )
+      setError('Unable to create the measurement schedule.')
+    } finally {
+      setSavingSchedule(false)
+    }
+  }
+
   const filteredSchedules =
     useMemo(() => {
       const term =
@@ -191,15 +284,22 @@ function MeasurementSchedule({
       })
     }, [schedules, search])
 
-  const openLead = (
+  const takeMeasurement = (
     schedule: MeasurementScheduleRecord,
   ) => {
+    if (schedule.measurementId) {
+      return
+    }
+
     navigate(
-      '/departments/leads-view',
+      '/departments/measurement',
       {
         state: {
           leadId:
             schedule.leadId,
+
+          scheduleId:
+            schedule.id,
 
           customerName:
             schedule.customerName,
@@ -242,13 +342,19 @@ function MeasurementSchedule({
             className="measurement-schedule-back-button"
             onClick={() =>
               navigate(
-                '/departments/leads-view',
+                '/departments/LeadsView',
               )
             }
           >
             ← Go to Leads
           </button>
-
+          <button
+            type="button"
+            className="measurement-go-home-button"
+            onClick={() => navigate('/')}
+          >
+            ← Go to Home
+          </button>
         </div>
 
 
@@ -270,6 +376,151 @@ function MeasurementSchedule({
               </span>
             </div>
           </div>
+        )}
+
+
+        {/* SELECTED LEAD FROM LEADS VIEW */}
+        {locationState.customerName && (
+          <div
+            style={{
+              marginBottom: '20px',
+              padding: '16px 18px',
+              borderRadius: '12px',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+            }}
+          >
+            <strong>Selected Lead</strong>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                gap: '12px',
+                marginTop: '10px',
+              }}
+            >
+              <div>
+                <span style={{ display: 'block', fontSize: '12px', color: '#64748b' }}>Name</span>
+                <strong>{locationState.customerName}</strong>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '12px', color: '#64748b' }}>Phone Number</span>
+                <strong>{locationState.phoneNumber || '—'}</strong>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '12px', color: '#64748b' }}>Place</span>
+                <strong>{locationState.place || '—'}</strong>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* PREFILLED SCHEDULE FORM FROM LEADS VIEW */}
+        {locationState.customerName && (
+          <section className="department-section" style={{ marginBottom: '20px' }}>
+            <div className="section-heading-row">
+              <div>
+                <h2>Schedule Measurement</h2>
+                <p>Lead information has been automatically filled from Leads View.</p>
+              </div>
+            </div>
+
+            <div className="form-grid">
+              <div className="input-group">
+                <label>Name of Customer</label>
+                <input
+                  type="text"
+                  value={locationState.customerName || ''}
+                  readOnly
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Phone Number</label>
+                <input
+                  type="tel"
+                  value={locationState.phoneNumber || ''}
+                  readOnly
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Place</label>
+                <input
+                  type="text"
+                  value={locationState.place || ''}
+                  readOnly
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Branch</label>
+                <input
+                  type="text"
+                  value={locationState.branch || ''}
+                  readOnly
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Measurement Date</label>
+                <input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(event) =>
+                    setScheduleDate(event.target.value)
+                  }
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Measurement Time</label>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(event) =>
+                    setScheduleTime(event.target.value)
+                  }
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Assigned To</label>
+                <input
+                  type="text"
+                  value={assignedTo}
+                  onChange={(event) =>
+                    setAssignedTo(event.target.value)
+                  }
+                  placeholder="Measurement staff"
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Remarks</label>
+                <input
+                  type="text"
+                  value={scheduleRemarks}
+                  onChange={(event) =>
+                    setScheduleRemarks(event.target.value)
+                  }
+                  placeholder="Optional remarks"
+                />
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button
+                type="button"
+                className="submit-job-button"
+                onClick={handleCreateSchedule}
+                disabled={savingSchedule}
+              >
+                {savingSchedule ? 'Saving...' : 'Save Measurement Schedule'}
+              </button>
+            </div>
+          </section>
         )}
 
 
@@ -619,20 +870,29 @@ function MeasurementSchedule({
                         </div>
 
 
-                        <button
-                          type="button"
-                          className="measurement-open-lead-button"
-                          onClick={() =>
-                            openLead(
-                              schedule,
-                            )
-                          }
-                        >
-                          Open Lead
-                          <span>
-                            →
-                          </span>
-                        </button>
+                        {schedule.measurementId ? (
+                          <div
+                            className="measurement-completed-badge"
+                            title="Measurement saved"
+                          >
+                            Measurement {schedule.measurementId}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="measurement-open-lead-button"
+                            onClick={() =>
+                              takeMeasurement(
+                                schedule,
+                              )
+                            }
+                          >
+                            Take Measurement
+                            <span>
+                              →
+                            </span>
+                          </button>
+                        )}
 
                       </div>
 

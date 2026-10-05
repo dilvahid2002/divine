@@ -280,7 +280,7 @@ function Leads({ user }: LeadsProps) {
             className="view-button"
             onClick={() =>
               navigate(
-                '/departments/leads-view',
+                '/departments/LeadsView',
               )
             }
           >

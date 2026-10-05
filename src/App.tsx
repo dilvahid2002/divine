@@ -1,3 +1,4 @@
+
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -29,6 +30,10 @@ import HR from './pages/departments/HR'
 import Cutting from './pages/departments/cutting'
 import Measurement from './pages/departments/Measurement'
 import LiveProduction from './pages/departments/live-production'
+
+import LeadsView from './pages/departments/LeadsView'
+import Leads from './pages/departments/Leads'
+import MeasurementSchedule from './pages/departments/MeasurementSchedule'
 
 import './App.css'
 
@@ -69,7 +74,7 @@ function DepartmentRoute({
   const hasAccess = user.roles.some(
     (userRole) =>
       userRole.trim().toLowerCase() ===
-      role.trim().toLowerCase(),
+      role.trim().toLowerCase()
   )
 
   if (!hasAccess) {
@@ -111,11 +116,9 @@ function App() {
   if (!currentUser) {
     return (
       <BrowserRouter>
-
         <LoginPage
           onLogin={handleLogin}
         />
-
       </BrowserRouter>
     )
   }
@@ -168,7 +171,10 @@ function App() {
         <Route
           path="/attandance"
           element={
-            <Attendance />
+            <Navigate
+              to="/attendance"
+              replace
+            />
           }
         />
 
@@ -200,6 +206,7 @@ function App() {
           }
         />
 
+
         {/* =========================================
             SALES
         ========================================== */}
@@ -228,6 +235,78 @@ function App() {
           element={
             <SalesStatistics
               user={currentUser}
+            />
+          }
+        />
+
+
+        {/* =========================================
+            LEADS
+        ========================================== */}
+
+        <Route
+          path="/departments/leads"
+          element={
+            <DepartmentRoute
+              user={currentUser}
+              role="Sales"
+            >
+              <Leads
+                user={currentUser}
+              />
+            </DepartmentRoute>
+          }
+        />
+
+
+        {/* =========================================
+            LEADS VIEW
+        ========================================== */}
+
+        <Route
+          path="/departments/LeadsView"
+          element={
+            <DepartmentRoute
+              user={currentUser}
+              role="Sales"
+            >
+              <LeadsView
+                user={currentUser}
+              />
+            </DepartmentRoute>
+          }
+        />
+
+
+        {/* =========================================
+            MEASUREMENT SCHEDULER
+        ========================================== */}
+
+        <Route
+          path="/departments/measurement-scheduler"
+          element={
+            <DepartmentRoute
+              user={currentUser}
+              role="Sales"
+            >
+              <MeasurementSchedule
+                user={currentUser}
+              />
+            </DepartmentRoute>
+          }
+        />
+
+
+        {/* =========================================
+            OLD MEASUREMENT SCHEDULE URL
+        ========================================== */}
+
+        <Route
+          path="/departments/MeasurementSchedule"
+          element={
+            <Navigate
+              to="/departments/measurement-scheduler"
+              replace
             />
           }
         />
@@ -446,3 +525,4 @@ function App() {
 
 
 export default App
+
