@@ -2280,6 +2280,13 @@ const handleQuotationConfirm =
           >
             + Measurement
           </button>
+          <button
+            type="button"
+            className="measurement-go-home-button"
+            onClick={() => navigate('/')}
+          >
+            ← Go to Home
+          </button>
         </div>
 
         {/* ERROR */}

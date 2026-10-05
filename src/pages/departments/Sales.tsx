@@ -1641,7 +1641,13 @@ function Sales({ user }: SalesProps) {
             >
               Clear Filters
             </button>
-
+            <button
+            type="button"
+            className="measurement-go-home-button"
+            onClick={() => navigate('/')}
+          >
+            ← Go to Home
+          </button>
           </div>
 
           {/* SEARCH */}
