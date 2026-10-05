@@ -105,6 +105,22 @@ const BRANCHES = [
   'Kondotty',
 ]
 
+const getTimestampDateString = (
+  timestamp?: Timestamp,
+) => {
+  if (!timestamp || !timestamp.toDate) {
+    return ''
+  }
+
+  const date = timestamp.toDate()
+
+  return `${date.getFullYear()}-${String(
+    date.getMonth() + 1,
+  ).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`
+}
+
 const getTodayString = () => {
   const today = new Date()
 
@@ -228,6 +244,12 @@ function LeadsView({
     useState('all')
 
   const [dateFilter, setDateFilter] =
+    useState('')
+
+  const [createdDateFilter, setCreatedDateFilter] =
+    useState('')
+
+  const [nextUpdateDateFilter, setNextUpdateDateFilter] =
     useState('')
 
   const [statusFilter, setStatusFilter] =
@@ -395,6 +417,29 @@ function LeadsView({
       }
 
       if (
+        createdDateFilter &&
+        getTimestampDateString(
+          lead.createdAt,
+        ) !== createdDateFilter
+      ) {
+        return false
+      }
+
+      if (nextUpdateDateFilter) {
+        const latestUpdate =
+          lead.updates.length > 0
+            ? lead.updates[lead.updates.length - 1]
+            : undefined
+
+        if (
+          latestUpdate?.nextUpdateDate !==
+          nextUpdateDateFilter
+        ) {
+          return false
+        }
+      }
+
+      if (
         statusFilter !== 'all' &&
         lead.status !== statusFilter
       ) {
@@ -452,6 +497,8 @@ function LeadsView({
     search,
     advisorFilter,
     dateFilter,
+    createdDateFilter,
+    nextUpdateDateFilter,
     statusFilter,
     sourceFilter,
     branchFilter,
@@ -1123,6 +1170,8 @@ function LeadsView({
     setSearch('')
     setAdvisorFilter('all')
     setDateFilter('')
+    setCreatedDateFilter('')
+    setNextUpdateDateFilter('')
     setStatusFilter('all')
     setSourceFilter('all')
     setBranchFilter('all')
@@ -1313,7 +1362,7 @@ function LeadsView({
           <div className="input-group">
 
             <label>
-              Date
+              Lead Date
             </label>
 
             <input
@@ -1321,6 +1370,44 @@ function LeadsView({
               value={dateFilter}
               onChange={event =>
                 setDateFilter(
+                  event.target.value,
+                )
+              }
+            />
+
+          </div>
+
+
+          <div className="input-group">
+
+            <label>
+              Created Date
+            </label>
+
+            <input
+              type="date"
+              value={createdDateFilter}
+              onChange={event =>
+                setCreatedDateFilter(
+                  event.target.value,
+                )
+              }
+            />
+
+          </div>
+
+
+          <div className="input-group">
+
+            <label>
+              Next Update Date
+            </label>
+
+            <input
+              type="date"
+              value={nextUpdateDateFilter}
+              onChange={event =>
+                setNextUpdateDateFilter(
                   event.target.value,
                 )
               }
