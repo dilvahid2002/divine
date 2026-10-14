@@ -58,6 +58,13 @@ interface JobOrderProps {
     'Sulthan Bathery',
   ]
 
+
+  const BRANCH_CODES: Record<Branch, string> = {
+    Kalpetta: 'KPT',
+    Kondotty: 'KDY',
+    'Sulthan Bathery': 'SBY',
+  }
+
   function JobOrder({ user }: JobOrderProps) {
     const navigate = useNavigate()
     const location = useLocation()
@@ -577,83 +584,47 @@ interface JobOrderProps {
 
       try {
         /*
-        * Dedicated counter:
-        *
-        * counters/jobOrders
-        *
-        * First order = 0
-        * Next = 1
-        * Next = 2
-        *
-        * Transaction prevents duplicate
-        * order numbers when multiple users
-        * create orders simultaneously.
+        * Each branch has its own counter so order IDs are
+        * numbered independently: KPT/1, KDY/1, SBY/1, etc.
+        * The transaction prevents duplicate numbers when
+        * multiple users create orders simultaneously.
         */
 
-        const counterRef =
-          doc(
-            db,
-            'counters',
-            'jobOrders',
-          )
+        const branchCode = BRANCH_CODES[branch]
+        const counterRef = doc(
+          db,
+          'counters',
+          `jobOrders_${branchCode}`,
+        )
 
-        const jobOrderRef =
-          doc(
-            collection(
-              db,
-              'job_orders',
-            ),
-          )
+        const jobOrderRef = doc(
+          collection(db, 'job_orders'),
+        )
 
-        let newOrderId = 0
-
+        let newOrderId = 1
 
         await runTransaction(
           db,
           async (transaction) => {
-            const counterSnapshot =
-              await transaction.get(
-                counterRef,
-              )
+            const counterSnapshot = await transaction.get(counterRef)
 
-
-            if (
-              !counterSnapshot.exists()
-            ) {
-              /*
-              * First order
-              */
-              newOrderId = 0
-
-              transaction.set(
-                counterRef,
-                {
-                  lastOrderId: 0,
-                },
-              )
+            if (!counterSnapshot.exists()) {
+              newOrderId = 1
+              transaction.set(counterRef, {
+                lastOrderId: newOrderId,
+              })
             } else {
-              const counterData =
-                counterSnapshot.data()
-
-              const lastOrderId =
-                Number(
-                  counterData.lastOrderId,
-                )
-
-              newOrderId =
-                Number.isFinite(
-                  lastOrderId,
-                )
-                  ? lastOrderId + 1
-                  : 0
-
-              transaction.update(
-                counterRef,
-                {
-                  lastOrderId:
-                    newOrderId,
-                },
+              const lastOrderId = Number(
+                counterSnapshot.data().lastOrderId,
               )
+
+              newOrderId = Number.isFinite(lastOrderId)
+                ? lastOrderId + 1
+                : 1
+
+              transaction.update(counterRef, {
+                lastOrderId: newOrderId,
+              })
             }
 
 
@@ -668,7 +639,7 @@ interface JobOrderProps {
                 ========================== */
 
                 orderId:
-                  newOrderId,
+                  `${branchCode}/${newOrderId}`,
 
 
                 /* =========================

@@ -1,4 +1,3 @@
-```tsx
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -20,13 +19,17 @@ interface AccountantProps {
   }
 }
 
-type PaymentStatus =
-  | 'Pending'
-  | 'Advance Received'
-  | 'Post Pay'
-  | 'Paid'
-
+type PaymentStatus = 'Pending' | 'Advance Received' | 'Post Pay' | 'Paid'
 type PaymentMethod = 'UPI' | 'Cash' | 'NEFT'
+type AccountantDataView =
+  | ''
+  | 'UPI'
+  | 'Cash'
+  | 'NEFT'
+  | 'totalDesignCharge'
+  | 'paidDesignCharge'
+  | 'unpaidDesignCharge'
+  | 'otherCharges'
 
 interface JobItem {
   slNo?: number
@@ -59,7 +62,6 @@ interface JobOrder {
   date: string
   expectedDeliveryDate: string
   branch: string
-
   customer: {
     name?: string
     companyName?: string
@@ -67,21 +69,16 @@ interface JobOrder {
     whatsappNumber?: string
     place?: string
   }
-
   items: JobItem[]
-
   customerAdviser?: {
     name?: string
     username?: string
   }
-
   accountant?: {
     name?: string
     username?: string
   }
-
   designCharge?: number
-
   accounting?: {
     totalAmount?: number
     amountReceivedInAdvance?: number
@@ -97,13 +94,16 @@ interface JobOrder {
     postPayRemarks?: string
     advancePayment?: PaymentRecord
     postPayPayment?: PaymentRecord
+    postPayPayments?: PaymentRecord[]
+    designChargePaidAmount?: number
+    designChargePayment?: PaymentRecord
+    designChargePayments?: PaymentRecord[]
     updatedAt?: Timestamp
     updatedBy?: {
       name?: string
       username?: string
     }
   }
-
   [key: string]: unknown
 }
 
@@ -121,31 +121,20 @@ const money = (value: unknown) =>
 const str = (value: unknown) =>
   value === undefined || value === null ? '' : String(value)
 
+// Removes undefined values so Firestore accepts the data.
 const clean = (value: unknown): unknown => {
   if (Array.isArray(value)) {
-    return value
-      .filter(v => v !== undefined)
-      .map(clean)
+    return value.filter(v => v !== undefined).map(clean)
   }
-
-  if (
-    value &&
-    typeof value === 'object' &&
-    !(value instanceof Timestamp)
-  ) {
+  if (value && typeof value === 'object' && !(value instanceof Timestamp)) {
     const out: Record<string, unknown> = {}
-
-    Object.entries(value as Record<string, unknown>).forEach(
-      ([key, value]) => {
-        if (value !== undefined) {
-          out[key] = clean(value)
-        }
-      },
-    )
-
+    Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
+      if (val !== undefined) {
+        out[key] = clean(val)
+      }
+    })
     return out
   }
-
   return value
 }
 
@@ -157,40 +146,20 @@ const normalize = (
   ...data,
   id,
   source,
-
-  orderId: str(
-    data.orderId ??
-      data.measurementId ??
-      id,
-  ),
-
+  orderId: str(data.orderId ?? data.measurementId ?? id),
   date: str(data.date),
-
-  expectedDeliveryDate: str(
-    data.expectedDeliveryDate ??
-      data.deliveryDate,
-  ),
-
-  branch: str(
-    data.branch ??
-      data.selectedBranch,
-  ),
-
+  expectedDeliveryDate: str(data.expectedDeliveryDate ?? data.deliveryDate),
+  branch: str(data.branch ?? data.selectedBranch),
   customer: data.customer || {},
-
   items: Array.isArray(data.items)
-    ? data.items.map(
-        (item: JobItem, index: number) => ({
-          ...item,
-          slNo: item.slNo ?? index + 1,
-        }),
-      )
+    ? data.items.map((item: JobItem, index: number) => ({
+        ...item,
+        slNo: item.slNo ?? index + 1,
+      }))
     : [],
-
   customerAdviser: data.customerAdviser || {},
   accountant: data.accountant,
   accounting: data.accounting || {},
-
   designCharge:
     typeof data.designCharge === 'number'
       ? data.designCharge
@@ -200,12 +169,56 @@ const normalize = (
 })
 
 const itemAmount = (item: JobItem) =>
-  num(
-    item.accountantAmount ??
-      item.amount ??
-      item.price ??
-      0,
-  )
+  num(item.accountantAmount ?? item.amount ?? item.price ?? 0)
+
+const collectionFor = (job: JobOrder) =>
+  job.source === 'job_order' ? 'job_orders' : 'measurements'
+
+const formatTimestamp = (timestamp?: Timestamp) => {
+  if (!timestamp) return '-'
+  try {
+    return timestamp.toDate().toLocaleString('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })
+  } catch {
+    return '-'
+  }
+}
+
+const cellStyle = { border: '1px solid #ddd', padding: 10 }
+const gridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
+  gap: 12,
+}
+const detailBoxStyle = {
+  padding: 15,
+  background: '#f8f9fb',
+  borderRadius: 10,
+}
+const overlayStyle = {
+  position: 'fixed' as const,
+  inset: 0,
+  background: 'rgba(0,0,0,.55)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 20,
+  zIndex: 1000,
+}
+const modalStyle = {
+  background: '#fff',
+  padding: 24,
+  borderRadius: 12,
+  width: 'min(500px,95vw)',
+}
+const inputStyle = {
+  width: '100%',
+  boxSizing: 'border-box' as const,
+  padding: 10,
+  marginTop: 6,
+}
 
 function Accountant({ user }: AccountantProps) {
   const navigate = useNavigate()
@@ -217,35 +230,33 @@ function Accountant({ user }: AccountantProps) {
   const [view, setView] = useState<'my' | 'all'>('my')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'' | PaymentStatus>('')
-
-  // NEW: Filter jobs by assigned accountant.
-  // The selected value is the accountant's username.
+  const [dataViewFilter, setDataViewFilter] = useState<AccountantDataView>('')
   const [accountantFilter, setAccountantFilter] = useState('')
-
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+
   const [expanded, setExpanded] = useState<string | null>(null)
   const [accepting, setAccepting] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
-
-  const [drafts, setDrafts] = useState<
-    Record<string, Record<number, string>>
-  >({})
+  const [drafts, setDrafts] = useState<Record<string, Record<number, string>>>({})
 
   const [advanceJob, setAdvanceJob] = useState<JobOrder | null>(null)
   const [advanceInput, setAdvanceInput] = useState('')
-  const [advanceMethod, setAdvanceMethod] =
-    useState<PaymentMethod>('Cash')
+  const [advanceMethod, setAdvanceMethod] = useState<PaymentMethod>('Cash')
   const [advanceRemarks, setAdvanceRemarks] = useState('')
 
   const [postJob, setPostJob] = useState<JobOrder | null>(null)
   const [postInput, setPostInput] = useState('')
-  const [postMethod, setPostMethod] =
-    useState<PaymentMethod>('Cash')
+  const [postMethod, setPostMethod] = useState<PaymentMethod>('Cash')
   const [postRemarks, setPostRemarks] = useState('')
 
-  // FIRESTORE LISTENERS
+  const [designJob, setDesignJob] = useState<JobOrder | null>(null)
+  const [designPaidInput, setDesignPaidInput] = useState('')
+  const [designPaymentMethod, setDesignPaymentMethod] =
+    useState<PaymentMethod>('Cash')
+  const [designPaymentRemarks, setDesignPaymentRemarks] = useState('')
 
+  // Firestore listeners
   useEffect(() => {
     const unsubs: Array<() => void> = []
 
@@ -259,12 +270,10 @@ function Accountant({ user }: AccountantProps) {
           const incoming = snapshot.docs.map(d =>
             normalize(source, d.id, d.data()),
           )
-
           setJobs(current => [
             ...current.filter(job => job.source !== source),
             ...incoming,
           ])
-
           setLoading(false)
         },
         err => {
@@ -273,7 +282,6 @@ function Accountant({ user }: AccountantProps) {
           setLoading(false)
         },
       )
-
       unsubs.push(unsub)
     }
 
@@ -283,8 +291,7 @@ function Accountant({ user }: AccountantProps) {
     return () => unsubs.forEach(unsub => unsub())
   }, [])
 
-  // USER
-
+  // User
   const username = user?.username?.trim().toLowerCase() || ''
 
   const mine = (job: JobOrder) =>
@@ -298,76 +305,116 @@ function Accountant({ user }: AccountantProps) {
         job.accounting?.postPayStatus,
     )
 
-  // MONEY CALCULATIONS
+  const updatedBy = () =>
+    user ? { name: user.name, username: user.username } : undefined
 
+  // Money calculations
   const itemsTotal = (job: JobOrder) =>
     job.items.reduce((sum, item) => sum + itemAmount(item), 0)
+  const designCharge = (job: JobOrder) => num(job.designCharge)
+  const designPaid = (job: JobOrder) =>
+    Math.min(designCharge(job), num(job.accounting?.designChargePaidAmount))
+  const designUnpaid = (job: JobOrder) =>
+    Math.max(0, designCharge(job) - designPaid(job))
+  const otherCharges = (job: JobOrder) => itemsTotal(job)
+  const total = (job: JobOrder) => itemsTotal(job) + designCharge(job)
+  const advance = (job: JobOrder) => num(job.accounting?.amountReceivedInAdvance)
+  const postPay = (job: JobOrder) => num(job.accounting?.postPayAmount)
+  const received = (job: JobOrder) => advance(job) + postPay(job)
+  const balance = (job: JobOrder) => Math.max(0, total(job) - received(job))
 
-  const designCharge = (job: JobOrder) =>
-    num(job.designCharge)
+  const postPayRecords = (job: JobOrder): PaymentRecord[] => {
+    const accounting = job.accounting || {}
+    if (accounting.postPayPayments?.length) return accounting.postPayPayments
+    return accounting.postPayPayment ? [accounting.postPayPayment] : []
+  }
 
-  const total = (job: JobOrder) =>
-    itemsTotal(job) + designCharge(job)
+  const designRecords = (job: JobOrder): PaymentRecord[] => {
+    const accounting = job.accounting || {}
+    if (accounting.designChargePayments?.length) {
+      return accounting.designChargePayments
+    }
+    return accounting.designChargePayment ? [accounting.designChargePayment] : []
+  }
 
-  const advance = (job: JobOrder) =>
-    num(job.accounting?.amountReceivedInAdvance)
+  const sumByMethod = (records: PaymentRecord[], method: PaymentMethod) =>
+    records.reduce(
+      (sum, record) => sum + (record.method === method ? num(record.amount) : 0),
+      0,
+    )
 
-  const postPay = (job: JobOrder) =>
-    num(job.accounting?.postPayAmount)
+  const amountByMethod = (job: JobOrder, method: PaymentMethod) => {
+    const accounting = job.accounting || {}
 
-  const received = (job: JobOrder) =>
-    advance(job) + postPay(job)
+    const advanceUsed =
+      accounting.advancePayment?.method || accounting.advancePaymentMethod
+    const advanceAmount = advanceUsed === method ? advance(job) : 0
 
-  const balance = (job: JobOrder) =>
-    Math.max(0, total(job) - received(job))
+    const postRecords = postPayRecords(job)
+    const postUsed =
+      accounting.postPayPayment?.method || accounting.postPayPaymentMethod
+    const postAmount = postRecords.length
+      ? sumByMethod(postRecords, method)
+      : postUsed === method
+        ? postPay(job)
+        : 0
+
+    const designAmount = sumByMethod(designRecords(job), method)
+
+    return advanceAmount + postAmount + designAmount
+  }
+
+  const hasPaymentMethod = (job: JobOrder, method: PaymentMethod) =>
+    amountByMethod(job, method) > 0
 
   const status = (job: JobOrder): PaymentStatus => {
-    if (job.accounting?.paymentStatus === 'Paid') {
-      return 'Paid'
-    }
-
-    if (job.accounting?.paymentStatus === 'Post Pay') {
-      return 'Post Pay'
-    }
-
+    if (job.accounting?.paymentStatus === 'Paid') return 'Paid'
+    if (job.accounting?.paymentStatus === 'Post Pay') return 'Post Pay'
     if (
       job.accounting?.paymentStatus === 'Advance Received' ||
       job.accounting?.advanceStatus === 'Advance Received'
     ) {
       return 'Advance Received'
     }
-
     return 'Pending'
   }
 
-  // DATE FILTER
-
   const dateMatches = (job: JobOrder) => {
     const jobDate = job.date?.slice(0, 10)
-
     if (!jobDate) return true
     if (fromDate && jobDate < fromDate) return false
     if (toDate && jobDate > toDate) return false
-
     return true
   }
 
-  // ACCOUNTANT NAME OPTIONS
-  // Deduplicate by username, since a user can own multiple jobs.
+  const dataViewMatches = (job: JobOrder) => {
+    switch (dataViewFilter) {
+      case 'UPI':
+      case 'Cash':
+      case 'NEFT':
+        return hasPaymentMethod(job, dataViewFilter)
+      case 'totalDesignCharge':
+        return designCharge(job) > 0
+      case 'paidDesignCharge':
+        return designPaid(job) > 0
+      case 'unpaidDesignCharge':
+        return designUnpaid(job) > 0
+      case 'otherCharges':
+        return otherCharges(job) > 0
+      default:
+        return true
+    }
+  }
 
+  // Accountant dropdown options (one per username)
   const accountantOptions = useMemo(() => {
-    const accounts = new Map<
-      string,
-      { username: string; name: string }
-    >()
+    const accounts = new Map<string, { username: string; name: string }>()
 
     jobs.forEach(job => {
       const accountUsername = str(job.accountant?.username).trim()
-
       if (!accountUsername) return
 
       const key = accountUsername.toLowerCase()
-
       if (!accounts.has(key)) {
         accounts.set(key, {
           username: accountUsername,
@@ -381,27 +428,14 @@ function Accountant({ user }: AccountantProps) {
     )
   }, [jobs])
 
-  // FILTERED JOBS
-
+  // Filtered jobs
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
 
     return jobs
       .filter(job => {
-        // My Work remains limited to the logged-in accountant.
-        if (view === 'my' && !mine(job)) {
-          return false
-        }
-
-        // IMPORTANT:
-        // Do not exclude jobs assigned to other accountants
-        // when Show All Work is selected.
-
-        if (filter && status(job) !== filter) {
-          return false
-        }
-
-        // NEW: Filter by assigned accountant username.
+        if (view === 'my' && !mine(job)) return false
+        if (filter && status(job) !== filter) return false
         if (
           accountantFilter &&
           str(job.accountant?.username).trim().toLowerCase() !==
@@ -409,14 +443,9 @@ function Accountant({ user }: AccountantProps) {
         ) {
           return false
         }
-
-        if (!dateMatches(job)) {
-          return false
-        }
-
-        if (!term) {
-          return true
-        }
+        if (!dateMatches(job)) return false
+        if (!dataViewMatches(job)) return false
+        if (!term) return true
 
         const text = [
           job.orderId,
@@ -451,44 +480,33 @@ function Accountant({ user }: AccountantProps) {
     search,
     filter,
     accountantFilter,
+    dataViewFilter,
     username,
     fromDate,
     toDate,
   ])
 
-  // TOP SUMMARY
-
+  // Top summary
   const summary = useMemo(() => {
-    const overallTotal = filtered.reduce(
-      (sum, job) => sum + total(job),
-      0,
-    )
-
-    const overallReceived = filtered.reduce(
-      (sum, job) => sum + received(job),
-      0,
-    )
-
-    const overallPending = filtered.reduce(
-      (sum, job) => sum + balance(job),
-      0,
-    )
+    const sum = (fn: (job: JobOrder) => number) =>
+      filtered.reduce((acc, job) => acc + fn(job), 0)
 
     return {
-      total: overallTotal,
-      received: overallReceived,
-      pending: overallPending,
+      total: sum(total),
+      received: sum(received),
+      pending: sum(balance),
       jobs: filtered.length,
+      paidUPI: sum(job => amountByMethod(job, 'UPI')),
+      paidCash: sum(job => amountByMethod(job, 'Cash')),
+      paidNEFT: sum(job => amountByMethod(job, 'NEFT')),
+      totalDesign: sum(designCharge),
+      paidDesign: sum(designPaid),
+      unpaidDesign: sum(designUnpaid),
+      nonDesignCharges: sum(otherCharges),
     }
   }, [filtered])
 
-  // FIRESTORE COLLECTION
-
-  const collectionFor = (job: JobOrder) =>
-    job.source === 'job_order' ? 'job_orders' : 'measurements'
-
-  // ACCEPT WORK
-
+  // Accept work
   const acceptWork = async (job: JobOrder) => {
     if (!user?.username) {
       setError('Accountant login information is missing.')
@@ -496,30 +514,20 @@ function Accountant({ user }: AccountantProps) {
     }
 
     setAccepting(job.id)
-
     try {
       await updateDoc(
         doc(db, collectionFor(job), job.id),
         clean({
-          accountant: {
-            name: user.name,
-            username: user.username,
-          },
-
+          accountant: { name: user.name, username: user.username },
           accounting: {
             ...(job.accounting || {}),
             paymentStatus: job.accounting?.paymentStatus || 'Pending',
             updatedAt: Timestamp.now(),
-            updatedBy: {
-              name: user.name,
-              username: user.username,
-            },
+            updatedBy: updatedBy(),
           },
-
           updatedAt: Timestamp.now(),
         }) as Record<string, unknown>,
       )
-
       setError('')
     } catch (err) {
       console.error(err)
@@ -529,19 +537,11 @@ function Accountant({ user }: AccountantProps) {
     }
   }
 
-  // ITEM AMOUNTS
-
-  const updateAmount = (
-    jobId: string,
-    index: number,
-    value: string,
-  ) => {
+  // Item amounts
+  const updateAmount = (jobId: string, index: number, value: string) => {
     setDrafts(current => ({
       ...current,
-      [jobId]: {
-        ...(current[jobId] || {}),
-        [index]: value,
-      },
+      [jobId]: { ...(current[jobId] || {}), [index]: value },
     }))
   }
 
@@ -561,39 +561,28 @@ function Accountant({ user }: AccountantProps) {
       (sum, item) => sum + num(item.accountantAmount),
       0,
     )
-
     const newTotal = newItemsTotal + designCharge(job)
 
     setSaving(job.id)
-
     try {
       await updateDoc(
         doc(db, collectionFor(job), job.id),
         clean({
           items,
-
           accounting: {
             ...(job.accounting || {}),
             totalAmount: newTotal,
             updatedAt: Timestamp.now(),
-            updatedBy: user
-              ? {
-                  name: user.name,
-                  username: user.username,
-                }
-              : undefined,
+            updatedBy: updatedBy(),
           },
-
           updatedAt: Timestamp.now(),
         }) as Record<string, unknown>,
       )
-
       setDrafts(current => {
         const next = { ...current }
         delete next[job.id]
         return next
       })
-
       setError('')
     } catch (err) {
       console.error(err)
@@ -603,19 +592,13 @@ function Accountant({ user }: AccountantProps) {
     }
   }
 
-  // ADVANCE PAYMENT
-
+  // Advance payment
   const openAdvance = (job: JobOrder) => {
     setAdvanceJob(job)
-
-    setAdvanceInput(
-      str(job.accounting?.amountReceivedInAdvance ?? ''),
-    )
-
+    setAdvanceInput(str(job.accounting?.amountReceivedInAdvance ?? ''))
     setAdvanceMethod(
       (job.accounting?.advancePaymentMethod || 'Cash') as PaymentMethod,
     )
-
     setAdvanceRemarks(job.accounting?.advanceRemarks || '')
     setError('')
   }
@@ -630,14 +613,12 @@ function Accountant({ user }: AccountantProps) {
       setError('Enter a valid advance amount.')
       return
     }
-
     if (amount > jobTotal) {
       setError('Advance cannot be greater than the total amount.')
       return
     }
 
     setSaving(advanceJob.id)
-
     try {
       const paidAt = Timestamp.now()
 
@@ -653,29 +634,16 @@ function Accountant({ user }: AccountantProps) {
             advanceReceivedAt: paidAt,
             advancePaymentMethod: advanceMethod,
             advanceRemarks: advanceRemarks.trim(),
-
             advancePayment: {
               amount,
               method: advanceMethod,
               remarks: advanceRemarks.trim(),
               paidAt,
-              paidBy: user
-                ? {
-                    name: user.name,
-                    username: user.username,
-                  }
-                : undefined,
+              paidBy: updatedBy(),
             },
-
             updatedAt: paidAt,
-            updatedBy: user
-              ? {
-                  name: user.name,
-                  username: user.username,
-                }
-              : undefined,
+            updatedBy: updatedBy(),
           },
-
           updatedAt: paidAt,
         }) as Record<string, unknown>,
       )
@@ -693,16 +661,13 @@ function Accountant({ user }: AccountantProps) {
     }
   }
 
-  // POST PAY
-
+  // Post pay
   const openPostPay = (job: JobOrder) => {
     setPostJob(job)
     setPostInput('')
-
     setPostMethod(
       (job.accounting?.postPayPaymentMethod || 'Cash') as PaymentMethod,
     )
-
     setPostRemarks(job.accounting?.postPayRemarks || '')
     setError('')
   }
@@ -711,67 +676,49 @@ function Accountant({ user }: AccountantProps) {
     if (!postJob) return
 
     const amount = num(postInput)
-    const remaining = balance(postJob)
 
     if (amount <= 0) {
       setError('Enter a valid Post Pay amount.')
       return
     }
-
-    if (amount > remaining) {
+    if (amount > balance(postJob)) {
       setError('Post Pay cannot be greater than the remaining balance.')
       return
     }
 
     setSaving(postJob.id)
-
     try {
       const paidAt = Timestamp.now()
       const newPostPay = postPay(postJob) + amount
-
       const newBalance = Math.max(
         0,
         total(postJob) - advance(postJob) - newPostPay,
       )
+      const record: PaymentRecord = {
+        amount,
+        method: postMethod,
+        remarks: postRemarks.trim(),
+        paidAt,
+        paidBy: updatedBy(),
+      }
 
       await updateDoc(
         doc(db, collectionFor(postJob), postJob.id),
         clean({
           accounting: {
             ...(postJob.accounting || {}),
-
-            totalAmount:
-              postJob.accounting?.totalAmount ?? total(postJob),
-
+            totalAmount: postJob.accounting?.totalAmount ?? total(postJob),
             postPayAmount: newPostPay,
+            postPayPayments: [...postPayRecords(postJob), record],
             postPayStatus: 'Post Pay',
             paymentStatus: newBalance === 0 ? 'Paid' : 'Post Pay',
             postPayAt: paidAt,
             postPayPaymentMethod: postMethod,
             postPayRemarks: postRemarks.trim(),
-
-            postPayPayment: {
-              amount,
-              method: postMethod,
-              remarks: postRemarks.trim(),
-              paidAt,
-              paidBy: user
-                ? {
-                    name: user.name,
-                    username: user.username,
-                  }
-                : undefined,
-            },
-
+            postPayPayment: record,
             updatedAt: paidAt,
-            updatedBy: user
-              ? {
-                  name: user.name,
-                  username: user.username,
-                }
-              : undefined,
+            updatedBy: updatedBy(),
           },
-
           updatedAt: paidAt,
         }) as Record<string, unknown>,
       )
@@ -789,22 +736,82 @@ function Accountant({ user }: AccountantProps) {
     }
   }
 
-  // DATE/TIME FORMAT
+  // Design charge payment
+  const openDesignPayment = (job: JobOrder) => {
+    setDesignJob(job)
+    setDesignPaidInput('')
+    setDesignPaymentMethod('Cash')
+    setDesignPaymentRemarks('')
+    setError('')
+  }
 
-  const formatTimestamp = (timestamp?: Timestamp) => {
-    if (!timestamp) return '-'
+  const saveDesignPayment = async () => {
+    if (!designJob) return
 
+    const amount = num(designPaidInput)
+
+    if (amount <= 0) {
+      setError('Enter a valid design-charge payment amount.')
+      return
+    }
+    if (amount > designUnpaid(designJob)) {
+      setError('Design-charge payment cannot exceed the unpaid design charge.')
+      return
+    }
+
+    setSaving(designJob.id)
     try {
-      return timestamp.toDate().toLocaleString('en-IN', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      })
-    } catch {
-      return '-'
+      const paidAt = Timestamp.now()
+      const record: PaymentRecord = {
+        amount,
+        method: designPaymentMethod,
+        remarks: designPaymentRemarks.trim(),
+        paidAt,
+        paidBy: updatedBy(),
+      }
+
+      await updateDoc(
+        doc(db, collectionFor(designJob), designJob.id),
+        clean({
+          accounting: {
+            ...(designJob.accounting || {}),
+            designChargePaidAmount: designPaid(designJob) + amount,
+            designChargePayment: record,
+            designChargePayments: [...designRecords(designJob), record],
+            paymentStatus: designJob.accounting?.paymentStatus || 'Pending',
+            updatedAt: paidAt,
+            updatedBy: updatedBy(),
+          },
+          updatedAt: paidAt,
+        }) as Record<string, unknown>,
+      )
+
+      setDesignJob(null)
+      setDesignPaidInput('')
+      setDesignPaymentRemarks('')
+      setDesignPaymentMethod('Cash')
+      setError('')
+    } catch (err) {
+      console.error(err)
+      setError('Unable to save design-charge payment.')
+    } finally {
+      setSaving(null)
     }
   }
 
-  // RENDER
+  const summaryCards = [
+    { label: 'Overall Total', value: money(summary.total), money: true },
+    { label: 'Overall Money Received', value: money(summary.received), money: true },
+    { label: 'Overall Pending', value: money(summary.pending), money: true },
+    { label: 'Jobs', value: String(summary.jobs), money: false },
+    { label: 'Paid via UPI', value: money(summary.paidUPI), money: true },
+    { label: 'Paid via Cash', value: money(summary.paidCash), money: true },
+    { label: 'Paid via NEFT', value: money(summary.paidNEFT), money: true },
+    { label: 'Total Design Charge', value: money(summary.totalDesign), money: true },
+    { label: 'Paid Design Charge', value: money(summary.paidDesign), money: true },
+    { label: 'Unpaid Design Charge', value: money(summary.unpaidDesign), money: true },
+    { label: 'Other Charges (non-DC)', value: money(summary.nonDesignCharges), money: true },
+  ]
 
   return (
     <div
@@ -818,13 +825,9 @@ function Accountant({ user }: AccountantProps) {
     >
       <div
         className="accountant-container"
-        style={{
-          maxWidth: 1400,
-          margin: '0 auto',
-        }}
+        style={{ maxWidth: 1400, margin: '0 auto' }}
       >
-        {/* HEADER */}
-
+        {/* Header */}
         <div
           className="accountant-header"
           style={{
@@ -837,12 +840,10 @@ function Accountant({ user }: AccountantProps) {
         >
           <div>
             <h1 style={{ margin: 0 }}>Accountant</h1>
-
             <p style={{ margin: '6px 0 0', color: '#666' }}>
               Manage item amounts, design charges, advance payments and Post Pay.
             </p>
           </div>
-
           <button
             className="accountant-back-button"
             type="button"
@@ -852,8 +853,7 @@ function Accountant({ user }: AccountantProps) {
           </button>
         </div>
 
-        {/* ERROR */}
-
+        {/* Error */}
         {error && (
           <div
             style={{
@@ -866,7 +866,6 @@ function Accountant({ user }: AccountantProps) {
             }}
           >
             {error}
-
             <button
               type="button"
               onClick={() => setError('')}
@@ -877,8 +876,7 @@ function Accountant({ user }: AccountantProps) {
           </div>
         )}
 
-        {/* SUMMARY CARDS */}
-
+        {/* Summary cards */}
         <div
           style={{
             display: 'grid',
@@ -887,12 +885,7 @@ function Accountant({ user }: AccountantProps) {
             marginBottom: 20,
           }}
         >
-          {[
-            { label: 'Overall Total', value: money(summary.total) },
-            { label: 'Overall Money Received', value: money(summary.received) },
-            { label: 'Overall Pending', value: money(summary.pending) },
-            { label: 'Jobs', value: String(summary.jobs) },
-          ].map(card => (
+          {summaryCards.map(card => (
             <div
               key={card.label}
               style={{
@@ -904,15 +897,14 @@ function Accountant({ user }: AccountantProps) {
             >
               <small>{card.label}</small>
               <h2 style={{ margin: '7px 0 0' }}>
-                {card.label === 'Jobs' ? '' : '₹'}
+                {card.money ? '₹' : ''}
                 {card.value}
               </h2>
             </div>
           ))}
         </div>
 
-        {/* TOOLBAR */}
-
+        {/* Toolbar */}
         <div
           className="accountant-toolbar"
           style={{
@@ -931,7 +923,6 @@ function Accountant({ user }: AccountantProps) {
           >
             My Work
           </button>
-
           <button
             className={view === 'all' ? 'accountant-tab active' : 'accountant-tab'}
             type="button"
@@ -955,18 +946,11 @@ function Accountant({ user }: AccountantProps) {
             }}
           />
 
-          {/* PAYMENT STATUS FILTER */}
-
           <select
             className="accountant-filter"
             value={filter}
-            onChange={e =>
-              setFilter(e.target.value as '' | PaymentStatus)
-            }
-            style={{
-              padding: '10px 12px',
-              borderRadius: 7,
-            }}
+            onChange={e => setFilter(e.target.value as '' | PaymentStatus)}
+            style={{ padding: '10px 12px', borderRadius: 7 }}
           >
             <option value="">All Payment Status</option>
             <option value="Pending">Pending</option>
@@ -975,19 +959,13 @@ function Accountant({ user }: AccountantProps) {
             <option value="Paid">Paid</option>
           </select>
 
-          {/* NEW: ACCOUNTANT NAME FILTER */}
-
           <select
             className="accountant-filter"
             value={accountantFilter}
             onChange={e => setAccountantFilter(e.target.value)}
-            style={{
-              padding: '10px 12px',
-              borderRadius: 7,
-            }}
+            style={{ padding: '10px 12px', borderRadius: 7 }}
           >
             <option value="">All Accountants</option>
-
             {accountantOptions.map(accountant => (
               <option
                 key={accountant.username.toLowerCase()}
@@ -997,10 +975,25 @@ function Accountant({ user }: AccountantProps) {
               </option>
             ))}
           </select>
+
+          <select
+            className="accountant-filter"
+            value={dataViewFilter}
+            onChange={e => setDataViewFilter(e.target.value as AccountantDataView)}
+            style={{ padding: '10px 12px', borderRadius: 7 }}
+          >
+            <option value="">All Data Views</option>
+            <option value="UPI">Paid via UPI</option>
+            <option value="Cash">Paid via Cash</option>
+            <option value="NEFT">Paid via NEFT</option>
+            <option value="totalDesignCharge">Total Design Charge</option>
+            <option value="paidDesignCharge">Paid Design Charge</option>
+            <option value="unpaidDesignCharge">Unpaid Design Charge</option>
+            <option value="otherCharges">Other Charges (non-DC)</option>
+          </select>
         </div>
 
-        {/* DATE FILTER */}
-
+        {/* Date filter */}
         <div
           style={{
             background: '#fff',
@@ -1014,7 +1007,6 @@ function Accountant({ user }: AccountantProps) {
           }}
         >
           <strong>Date Filter</strong>
-
           <label>
             From:{' '}
             <input
@@ -1024,7 +1016,6 @@ function Accountant({ user }: AccountantProps) {
               style={{ padding: 8, marginLeft: 5 }}
             />
           </label>
-
           <label>
             To:{' '}
             <input
@@ -1034,7 +1025,6 @@ function Accountant({ user }: AccountantProps) {
               style={{ padding: 8, marginLeft: 5 }}
             />
           </label>
-
           {(fromDate || toDate) && (
             <button
               type="button"
@@ -1048,12 +1038,9 @@ function Accountant({ user }: AccountantProps) {
           )}
         </div>
 
-        {/* JOBS */}
-
+        {/* Jobs */}
         {loading ? (
-          <div className="accountant-loading">
-            Loading accountant work...
-          </div>
+          <div className="accountant-loading">Loading accountant work...</div>
         ) : filtered.length === 0 ? (
           <div
             className="accountant-empty"
@@ -1091,8 +1078,7 @@ function Accountant({ user }: AccountantProps) {
                     boxShadow: '0 2px 10px rgba(0,0,0,.07)',
                   }}
                 >
-                  {/* JOB HEADER */}
-
+                  {/* Job header */}
                   <div
                     className="accountant-job-header"
                     style={{
@@ -1104,24 +1090,20 @@ function Accountant({ user }: AccountantProps) {
                   >
                     <div>
                       <h2 style={{ margin: 0 }}>Job #{job.orderId}</h2>
-
                       <div style={{ marginTop: 5 }}>
                         {job.customer?.name || 'Customer'}
                         {job.customer?.companyName
                           ? ` • ${job.customer.companyName}`
                           : ''}
                       </div>
-
                       <div style={{ marginTop: 5, color: '#666' }}>
                         Accountant: {job.accountant?.name || 'Unassigned'}
                       </div>
                     </div>
-
                     <strong>{jobStatus}</strong>
                   </div>
 
-                  {/* BASIC INFO */}
-
+                  {/* Basic info */}
                   <div
                     style={{
                       display: 'grid',
@@ -1134,25 +1116,21 @@ function Accountant({ user }: AccountantProps) {
                       <small>Entry Date</small>
                       <div>{job.date || '-'}</div>
                     </div>
-
                     <div>
                       <small>Delivery Date</small>
                       <div>{job.expectedDeliveryDate || '-'}</div>
                     </div>
-
                     <div>
                       <small>Branch</small>
                       <div>{job.branch || '-'}</div>
                     </div>
-
                     <div>
                       <small>Customer Adviser</small>
                       <div>{job.customerAdviser?.name || '-'}</div>
                     </div>
                   </div>
 
-                  {/* ACTIONS */}
-
+                  {/* Actions */}
                   <div
                     className="accountant-actions"
                     style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}
@@ -1179,7 +1157,6 @@ function Accountant({ user }: AccountantProps) {
                         <button type="button" onClick={() => openAdvance(job)}>
                           Amount Received in Advance
                         </button>
-
                         <button
                           type="button"
                           disabled={jobBalance <= 0 || jobStatus === 'Paid'}
@@ -1187,50 +1164,47 @@ function Accountant({ user }: AccountantProps) {
                         >
                           Post Pay
                         </button>
+                        <button
+                          type="button"
+                          disabled={designUnpaid(job) <= 0}
+                          onClick={() => openDesignPayment(job)}
+                        >
+                          Record Design Charge Payment
+                        </button>
                       </>
                     )}
                   </div>
 
-                  {/* DETAILS */}
-
+                  {/* Details */}
                   {isOpen && (
                     <div style={{ marginTop: 22 }}>
-                      {/* CUSTOMER */}
-
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
-                          gap: 12,
-                          marginBottom: 20,
-                        }}
-                      >
+                      {/* Customer */}
+                      <div style={{ ...gridStyle, marginBottom: 20 }}>
                         <div>
                           <strong>Customer</strong>
                           <div>{job.customer?.name || '-'}</div>
                         </div>
-
                         <div>
                           <strong>Phone</strong>
                           <div>{job.customer?.phoneNumber || '-'}</div>
                         </div>
-
                         <div>
                           <strong>WhatsApp</strong>
                           <div>{job.customer?.whatsappNumber || '-'}</div>
                         </div>
-
                         <div>
                           <strong>Place</strong>
                           <div>{job.customer?.place || '-'}</div>
                         </div>
                       </div>
 
-                      {/* ITEMS */}
-
+                      {/* Items */}
                       <h3 className="accountant-subheading">Item Amounts</h3>
 
-                      <div className="accountant-table-wrap" style={{ overflowX: 'auto' }}>
+                      <div
+                        className="accountant-table-wrap"
+                        style={{ overflowX: 'auto' }}
+                      >
                         <table
                           className="accountant-items-table"
                           style={{
@@ -1251,11 +1225,7 @@ function Accountant({ user }: AccountantProps) {
                               ].map(title => (
                                 <th
                                   key={title}
-                                  style={{
-                                    border: '1px solid #ddd',
-                                    padding: 10,
-                                    textAlign: 'left',
-                                  }}
+                                  style={{ ...cellStyle, textAlign: 'left' }}
                                 >
                                   {title}
                                 </th>
@@ -1277,27 +1247,14 @@ function Accountant({ user }: AccountantProps) {
 
                               return (
                                 <tr key={`${job.id}-${index}`}>
-                                  <td style={{ border: '1px solid #ddd', padding: 10 }}>
-                                    {item.slNo ?? index + 1}
-                                  </td>
-
-                                  <td style={{ border: '1px solid #ddd', padding: 10 }}>
-                                    {item.name || '-'}
-                                  </td>
-
-                                  <td style={{ border: '1px solid #ddd', padding: 10 }}>
+                                  <td style={cellStyle}>{item.slNo ?? index + 1}</td>
+                                  <td style={cellStyle}>{item.name || '-'}</td>
+                                  <td style={cellStyle}>
                                     {item.width || '-'} × {item.height || '-'}
                                   </td>
-
-                                  <td style={{ border: '1px solid #ddd', padding: 10 }}>
-                                    {item.qty || '-'}
-                                  </td>
-
-                                  <td style={{ border: '1px solid #ddd', padding: 10 }}>
-                                    ₹{money(item.price)}
-                                  </td>
-
-                                  <td style={{ border: '1px solid #ddd', padding: 10 }}>
+                                  <td style={cellStyle}>{item.qty || '-'}</td>
+                                  <td style={cellStyle}>₹{money(item.price)}</td>
+                                  <td style={cellStyle}>
                                     <input
                                       type="number"
                                       min="0"
@@ -1305,11 +1262,7 @@ function Accountant({ user }: AccountantProps) {
                                       disabled={!isMine}
                                       value={value}
                                       onChange={e =>
-                                        updateAmount(
-                                          job.id,
-                                          index,
-                                          e.target.value,
-                                        )
+                                        updateAmount(job.id, index, e.target.value)
                                       }
                                       placeholder="Enter amount"
                                       style={{ width: 140, padding: 8 }}
@@ -1321,39 +1274,14 @@ function Accountant({ user }: AccountantProps) {
 
                             {job.designCharge !== undefined && (
                               <tr>
-                                <td style={{ border: '1px solid #ddd', padding: 10 }}>
-                                  {job.items.length + 1}
-                                </td>
-
-                                <td
-                                  style={{
-                                    border: '1px solid #ddd',
-                                    padding: 10,
-                                    fontWeight: 700,
-                                  }}
-                                >
+                                <td style={cellStyle}>{job.items.length + 1}</td>
+                                <td style={{ ...cellStyle, fontWeight: 700 }}>
                                   Design Charge
                                 </td>
-
-                                <td style={{ border: '1px solid #ddd', padding: 10 }}>
-                                  -
-                                </td>
-
-                                <td style={{ border: '1px solid #ddd', padding: 10 }}>
-                                  1
-                                </td>
-
-                                <td style={{ border: '1px solid #ddd', padding: 10 }}>
-                                  ₹{money(job.designCharge)}
-                                </td>
-
-                                <td
-                                  style={{
-                                    border: '1px solid #ddd',
-                                    padding: 10,
-                                    fontWeight: 700,
-                                  }}
-                                >
+                                <td style={cellStyle}>-</td>
+                                <td style={cellStyle}>1</td>
+                                <td style={cellStyle}>₹{money(job.designCharge)}</td>
+                                <td style={{ ...cellStyle, fontWeight: 700 }}>
                                   ₹{money(job.designCharge)}
                                 </td>
                               </tr>
@@ -1372,7 +1300,6 @@ function Accountant({ user }: AccountantProps) {
                               >
                                 Total Amount
                               </th>
-
                               <th
                                 style={{
                                   border: '1px solid #ddd',
@@ -1398,20 +1325,16 @@ function Accountant({ user }: AccountantProps) {
                         </button>
                       )}
 
-                      {/* PAYMENT SUMMARY */}
-
+                      {/* Payment summary */}
                       <div
                         className="accountant-summary-grid"
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
-                          gap: 12,
-                          marginTop: 20,
-                        }}
+                        style={{ ...gridStyle, marginTop: 20 }}
                       >
                         {[
                           { label: 'Items Total', value: itemsTotal(job) },
                           { label: 'Design Charge', value: designCharge(job) },
+                          { label: 'Design Charge Paid', value: designPaid(job) },
+                          { label: 'Design Charge Unpaid', value: designUnpaid(job) },
                           { label: 'Total Amount', value: jobTotal },
                           { label: 'Advance Received', value: jobAdvance },
                           { label: 'Post Pay', value: jobPostPay },
@@ -1430,32 +1353,16 @@ function Accountant({ user }: AccountantProps) {
                         </div>
                       </div>
 
-                      {/* ADVANCE PAYMENT DETAILS */}
-
+                      {/* Advance payment details */}
                       {(job.accounting?.advancePayment ||
                         job.accounting?.amountReceivedInAdvance) && (
-                        <div
-                          style={{
-                            marginTop: 20,
-                            padding: 15,
-                            background: '#f8f9fb',
-                            borderRadius: 10,
-                          }}
-                        >
+                        <div style={{ ...detailBoxStyle, marginTop: 20 }}>
                           <h4 style={{ marginTop: 0 }}>Advance Payment</h4>
-
-                          <div
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
-                              gap: 12,
-                            }}
-                          >
+                          <div style={gridStyle}>
                             <div>
                               <small>Amount</small>
                               <div>₹{money(jobAdvance)}</div>
                             </div>
-
                             <div>
                               <small>Payment Method</small>
                               <div>
@@ -1464,7 +1371,6 @@ function Accountant({ user }: AccountantProps) {
                                   '-'}
                               </div>
                             </div>
-
                             <div>
                               <small>Paid Time</small>
                               <div>
@@ -1474,7 +1380,6 @@ function Accountant({ user }: AccountantProps) {
                                 )}
                               </div>
                             </div>
-
                             <div>
                               <small>Remarks</small>
                               <div>
@@ -1487,31 +1392,15 @@ function Accountant({ user }: AccountantProps) {
                         </div>
                       )}
 
-                      {/* POST PAY DETAILS */}
-
+                      {/* Post pay details */}
                       {job.accounting?.postPayAmount ? (
-                        <div
-                          style={{
-                            marginTop: 15,
-                            padding: 15,
-                            background: '#f8f9fb',
-                            borderRadius: 10,
-                          }}
-                        >
+                        <div style={{ ...detailBoxStyle, marginTop: 15 }}>
                           <h4 style={{ marginTop: 0 }}>Post Pay Payment</h4>
-
-                          <div
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
-                              gap: 12,
-                            }}
-                          >
+                          <div style={gridStyle}>
                             <div>
                               <small>Amount</small>
                               <div>₹{money(jobPostPay)}</div>
                             </div>
-
                             <div>
                               <small>Payment Method</small>
                               <div>
@@ -1520,7 +1409,6 @@ function Accountant({ user }: AccountantProps) {
                                   '-'}
                               </div>
                             </div>
-
                             <div>
                               <small>Paid Time</small>
                               <div>
@@ -1530,7 +1418,6 @@ function Accountant({ user }: AccountantProps) {
                                 )}
                               </div>
                             </div>
-
                             <div>
                               <small>Remarks</small>
                               <div>
@@ -1542,6 +1429,48 @@ function Accountant({ user }: AccountantProps) {
                           </div>
                         </div>
                       ) : null}
+
+                      {/* Design charge details */}
+                      {(job.accounting?.designChargePayment ||
+                        designPaid(job) > 0) && (
+                        <div style={{ ...detailBoxStyle, marginTop: 15 }}>
+                          <h4 style={{ marginTop: 0 }}>Design Charge Payments</h4>
+                          <div style={gridStyle}>
+                            <div>
+                              <small>Total Design Charge</small>
+                              <div>₹{money(designCharge(job))}</div>
+                            </div>
+                            <div>
+                              <small>Paid</small>
+                              <div>₹{money(designPaid(job))}</div>
+                            </div>
+                            <div>
+                              <small>Unpaid</small>
+                              <div>₹{money(designUnpaid(job))}</div>
+                            </div>
+                            <div>
+                              <small>Latest Payment Method</small>
+                              <div>
+                                {job.accounting?.designChargePayment?.method || '-'}
+                              </div>
+                            </div>
+                            <div>
+                              <small>Latest Payment Time</small>
+                              <div>
+                                {formatTimestamp(
+                                  job.accounting?.designChargePayment?.paidAt,
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <small>Latest Remarks</small>
+                              <div>
+                                {job.accounting?.designChargePayment?.remarks || '-'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1550,41 +1479,17 @@ function Accountant({ user }: AccountantProps) {
           </div>
         )}
 
-        {/* ADVANCE PAYMENT MODAL */}
-
+        {/* Advance payment modal */}
         {advanceJob && (
-          <div
-            onClick={() => setAdvanceJob(null)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,.55)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 20,
-              zIndex: 1000,
-            }}
-          >
-            <div
-              onClick={e => e.stopPropagation()}
-              style={{
-                background: '#fff',
-                padding: 24,
-                borderRadius: 12,
-                width: 'min(500px,95vw)',
-              }}
-            >
+          <div onClick={() => setAdvanceJob(null)} style={overlayStyle}>
+            <div onClick={e => e.stopPropagation()} style={modalStyle}>
               <h2>Amount Received in Advance</h2>
-
               <p>
                 Job: <strong>{advanceJob.orderId}</strong>
               </p>
-
               <p>Total: ₹{money(total(advanceJob))}</p>
 
               <label>Amount</label>
-
               <input
                 autoFocus
                 type="number"
@@ -1593,23 +1498,15 @@ function Accountant({ user }: AccountantProps) {
                 value={advanceInput}
                 onChange={e => setAdvanceInput(e.target.value)}
                 placeholder="Enter advance amount"
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  padding: 10,
-                  marginTop: 6,
-                }}
+                style={inputStyle}
               />
 
               <label style={{ display: 'block', marginTop: 15 }}>
                 Payment Method
               </label>
-
               <select
                 value={advanceMethod}
-                onChange={e =>
-                  setAdvanceMethod(e.target.value as PaymentMethod)
-                }
+                onChange={e => setAdvanceMethod(e.target.value as PaymentMethod)}
                 style={{ width: '100%', padding: 10, marginTop: 6 }}
               >
                 <option value="Cash">Cash</option>
@@ -1617,22 +1514,13 @@ function Accountant({ user }: AccountantProps) {
                 <option value="NEFT">NEFT</option>
               </select>
 
-              <label style={{ display: 'block', marginTop: 15 }}>
-                Remarks
-              </label>
-
+              <label style={{ display: 'block', marginTop: 15 }}>Remarks</label>
               <textarea
                 value={advanceRemarks}
                 onChange={e => setAdvanceRemarks(e.target.value)}
                 placeholder="Enter remarks"
                 rows={3}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  padding: 10,
-                  marginTop: 6,
-                  resize: 'vertical',
-                }}
+                style={{ ...inputStyle, resize: 'vertical' }}
               />
 
               <div
@@ -1646,7 +1534,6 @@ function Accountant({ user }: AccountantProps) {
                 <button type="button" onClick={() => setAdvanceJob(null)}>
                   Cancel
                 </button>
-
                 <button
                   type="button"
                   disabled={saving === advanceJob.id}
@@ -1659,67 +1546,38 @@ function Accountant({ user }: AccountantProps) {
           </div>
         )}
 
-        {/* POST PAY MODAL */}
-
-        {postJob && (
-          <div
-            onClick={() => setPostJob(null)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,.55)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 20,
-              zIndex: 1000,
-            }}
-          >
-            <div
-              onClick={e => e.stopPropagation()}
-              style={{
-                background: '#fff',
-                padding: 24,
-                borderRadius: 12,
-                width: 'min(500px,95vw)',
-              }}
-            >
-              <h2>Post Pay</h2>
-
+        {/* Design charge payment modal */}
+        {designJob && (
+          <div onClick={() => setDesignJob(null)} style={overlayStyle}>
+            <div onClick={e => e.stopPropagation()} style={modalStyle}>
+              <h2>Record Design Charge Payment</h2>
               <p>
-                Job: <strong>{postJob.orderId}</strong>
+                Job: <strong>{designJob.orderId}</strong>
               </p>
+              <p>Total Design Charge: ₹{money(designCharge(designJob))}</p>
+              <p>Already Paid: ₹{money(designPaid(designJob))}</p>
+              <p>Unpaid Design Charge: ₹{money(designUnpaid(designJob))}</p>
 
-              <p>
-                Remaining Balance: ₹{money(balance(postJob))}
-              </p>
-
-              <label>Post Pay Amount</label>
-
+              <label>Payment Amount</label>
               <input
                 autoFocus
                 type="number"
-                min="0"
+                min="0.01"
+                max={designUnpaid(designJob)}
                 step="0.01"
-                value={postInput}
-                onChange={e => setPostInput(e.target.value)}
-                placeholder="Enter payment amount"
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  padding: 10,
-                  marginTop: 6,
-                }}
+                value={designPaidInput}
+                onChange={e => setDesignPaidInput(e.target.value)}
+                placeholder="Enter design-charge payment"
+                style={inputStyle}
               />
 
               <label style={{ display: 'block', marginTop: 15 }}>
                 Payment Method
               </label>
-
               <select
-                value={postMethod}
+                value={designPaymentMethod}
                 onChange={e =>
-                  setPostMethod(e.target.value as PaymentMethod)
+                  setDesignPaymentMethod(e.target.value as PaymentMethod)
                 }
                 style={{ width: '100%', padding: 10, marginTop: 6 }}
               >
@@ -1728,22 +1586,80 @@ function Accountant({ user }: AccountantProps) {
                 <option value="NEFT">NEFT</option>
               </select>
 
-              <label style={{ display: 'block', marginTop: 15 }}>
-                Remarks
-              </label>
+              <label style={{ display: 'block', marginTop: 15 }}>Remarks</label>
+              <textarea
+                value={designPaymentRemarks}
+                onChange={e => setDesignPaymentRemarks(e.target.value)}
+                placeholder="Enter remarks"
+                rows={3}
+                style={{ ...inputStyle, resize: 'vertical' }}
+              />
 
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: 10,
+                  marginTop: 20,
+                }}
+              >
+                <button type="button" onClick={() => setDesignJob(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={saving === designJob.id}
+                  onClick={saveDesignPayment}
+                >
+                  {saving === designJob.id ? 'Saving...' : 'Save Design Payment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Post pay modal */}
+        {postJob && (
+          <div onClick={() => setPostJob(null)} style={overlayStyle}>
+            <div onClick={e => e.stopPropagation()} style={modalStyle}>
+              <h2>Post Pay</h2>
+              <p>
+                Job: <strong>{postJob.orderId}</strong>
+              </p>
+              <p>Remaining Balance: ₹{money(balance(postJob))}</p>
+
+              <label>Post Pay Amount</label>
+              <input
+                autoFocus
+                type="number"
+                min="0"
+                step="0.01"
+                value={postInput}
+                onChange={e => setPostInput(e.target.value)}
+                placeholder="Enter payment amount"
+                style={inputStyle}
+              />
+
+              <label style={{ display: 'block', marginTop: 15 }}>
+                Payment Method
+              </label>
+              <select
+                value={postMethod}
+                onChange={e => setPostMethod(e.target.value as PaymentMethod)}
+                style={{ width: '100%', padding: 10, marginTop: 6 }}
+              >
+                <option value="Cash">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="NEFT">NEFT</option>
+              </select>
+
+              <label style={{ display: 'block', marginTop: 15 }}>Remarks</label>
               <textarea
                 value={postRemarks}
                 onChange={e => setPostRemarks(e.target.value)}
                 placeholder="Enter remarks"
                 rows={3}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  padding: 10,
-                  marginTop: 6,
-                  resize: 'vertical',
-                }}
+                style={{ ...inputStyle, resize: 'vertical' }}
               />
 
               <div
@@ -1757,7 +1673,6 @@ function Accountant({ user }: AccountantProps) {
                 <button type="button" onClick={() => setPostJob(null)}>
                   Cancel
                 </button>
-
                 <button
                   type="button"
                   disabled={saving === postJob.id}
@@ -1775,4 +1690,3 @@ function Accountant({ user }: AccountantProps) {
 }
 
 export default Accountant
-```
