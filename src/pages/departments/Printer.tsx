@@ -117,6 +117,7 @@ interface PrintableOrder {
     printerUsername?: string | null
 
     printBranch?: string | null
+    printCompletedAt?: unknown
   }
 
   customerAdviser: {
@@ -565,6 +566,10 @@ function Printer({
                     printBranch:
                       data.officeInfo?.printBranch ??
                       null,
+
+                    printCompletedAt:
+                      data.officeInfo?.printCompletedAt ??
+                      null,
                   },
 
 
@@ -760,6 +765,10 @@ function Printer({
 
                     printBranch:
                       data.officeInfo?.printBranch ??
+                      null,
+
+                    printCompletedAt:
+                      data.officeInfo?.printCompletedAt ??
                       null,
                   },
 
@@ -1462,6 +1471,12 @@ function Printer({
 
             'officeInfo.printerUsername':
               currentUser.username,
+
+            // Preserve an existing completion timestamp.
+            // Otherwise, save the actual finishing time.
+            'officeInfo.printCompletedAt':
+              order.officeInfo.printCompletedAt ??
+              Timestamp.now(),
           },
         )
 

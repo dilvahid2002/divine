@@ -85,6 +85,10 @@ interface JobRecord {
 
     productionStaff: ProductionStaff[]
     productionBranch?: string | null
+
+    printCompletedAt?: Timestamp
+    cuttingCompletedAt?: Timestamp
+    productionCompletedAt?: Timestamp
   }
 
   customerAdviser: {
@@ -359,6 +363,21 @@ const createJobRecord = (
         getString(
           officeInfo?.productionBranch,
         ) || null,
+
+      printCompletedAt:
+        officeInfo?.printCompletedAt instanceof Timestamp
+          ? officeInfo.printCompletedAt
+          : undefined,
+
+      cuttingCompletedAt:
+        officeInfo?.cuttingCompletedAt instanceof Timestamp
+          ? officeInfo.cuttingCompletedAt
+          : undefined,
+
+      productionCompletedAt:
+        officeInfo?.productionCompletedAt instanceof Timestamp
+          ? officeInfo.productionCompletedAt
+          : undefined,
     },
 
     customerAdviser: {
@@ -509,6 +528,27 @@ const formatDate = (
       year: 'numeric',
     },
   )
+}
+
+const timestampDateKey = (value?: Timestamp): string => {
+  if (!value || typeof value.toDate !== 'function') {
+    return ''
+  }
+
+  const date = value.toDate()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const isTimestampInRange = (
+  value: Timestamp | undefined,
+  from: string,
+  to: string,
+): boolean => {
+  const key = timestampDateKey(value)
+  return !!key && key >= from && key <= to
 }
 
 const sortRows = <
@@ -765,6 +805,27 @@ function SalesManager({
       validRange,
     ])
 
+  const printerJobsInRange = useMemo(() => {
+    if (!validRange) return []
+    return jobs.filter((job) =>
+      isTimestampInRange(job.officeInfo.printCompletedAt, dateFrom, dateTo),
+    )
+  }, [jobs, dateFrom, dateTo, validRange])
+
+  const cuttingJobsInRange = useMemo(() => {
+    if (!validRange) return []
+    return jobs.filter((job) =>
+      isTimestampInRange(job.officeInfo.cuttingCompletedAt, dateFrom, dateTo),
+    )
+  }, [jobs, dateFrom, dateTo, validRange])
+
+  const productionJobsInRange = useMemo(() => {
+    if (!validRange) return []
+    return jobs.filter((job) =>
+      isTimestampInRange(job.officeInfo.productionCompletedAt, dateFrom, dateTo),
+    )
+  }, [jobs, dateFrom, dateTo, validRange])
+
   const designerRows =
     useMemo<
       DepartmentRowWithFiles[]
@@ -862,7 +923,7 @@ function SalesManager({
           DepartmentRowWithFiles
         >()
 
-      jobsInRange.forEach(
+      printerJobsInRange.forEach(
         (job) => {
           if (
             !job.officeInfo
@@ -934,7 +995,7 @@ function SalesManager({
           map.values(),
         ),
       )
-    }, [jobsInRange])
+    }, [printerJobsInRange])
 
   /*
    * CUTTING
@@ -949,7 +1010,7 @@ function SalesManager({
           DepartmentRowWithFiles
         >()
 
-      jobsInRange.forEach(
+      cuttingJobsInRange.forEach(
         (job) => {
           if (
             !job.officeInfo
@@ -1021,7 +1082,7 @@ function SalesManager({
           map.values(),
         ),
       )
-    }, [jobsInRange])
+    }, [cuttingJobsInRange])
 
   /*
    * PRODUCTION
@@ -1036,7 +1097,7 @@ function SalesManager({
           DepartmentRowWithFiles
         >()
 
-      jobsInRange.forEach(
+      productionJobsInRange.forEach(
         (job) => {
           if (
             !job.officeInfo
@@ -1143,7 +1204,7 @@ function SalesManager({
           map.values(),
         ),
       )
-    }, [jobsInRange])
+    }, [productionJobsInRange])
 
   const clearDates = () => {
     setDateFrom('')
@@ -1206,15 +1267,15 @@ function SalesManager({
             )}
           </div>
 
-          <button
-            type="button"
-            className="add-item-button"
-            onClick={() =>
-              navigate('/attandance')
-            }
-          >
-            Attendance
-          </button>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="add-item-button"
+              onClick={() => navigate('/attandance')}
+            >
+              Attendance
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -1446,9 +1507,7 @@ function SalesManager({
               </h2>
 
               <p>
-                Printer name, completed
-                works and total square
-                feet.
+                Printer name, completed works and total square feet. Date range uses Print Finished date.
               </p>
             </div>
           </div>
@@ -1538,9 +1597,7 @@ function SalesManager({
               </h2>
 
               <p>
-                Cutting staff, completed
-                works and total square
-                feet.
+                Cutting staff, completed works and total square feet. Date range uses Cutting Finished date.
               </p>
             </div>
           </div>
@@ -1638,8 +1695,7 @@ function SalesManager({
               </h2>
 
               <p>
-                Production staff and
-                completed works.
+                Production staff and completed works. Date range uses Production Completed date.
               </p>
             </div>
           </div>
@@ -1924,6 +1980,42 @@ function SalesManager({
                                 )}
                               </div>
                             </>
+                          )}
+
+                          {viewDepartment === 'printer' && (
+                            <div>
+                              <strong>Print Finished:</strong>{' '}
+                              {job.officeInfo.printCompletedAt
+                                ? job.officeInfo.printCompletedAt.toDate().toLocaleString('en-IN', {
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                    hour: '2-digit', minute: '2-digit',
+                                  })
+                                : '-'}
+                            </div>
+                          )}
+
+                          {viewDepartment === 'cutting' && (
+                            <div>
+                              <strong>Cutting Finished:</strong>{' '}
+                              {job.officeInfo.cuttingCompletedAt
+                                ? job.officeInfo.cuttingCompletedAt.toDate().toLocaleString('en-IN', {
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                    hour: '2-digit', minute: '2-digit',
+                                  })
+                                : '-'}
+                            </div>
+                          )}
+
+                          {viewDepartment === 'production' && (
+                            <div>
+                              <strong>Production Completed:</strong>{' '}
+                              {job.officeInfo.productionCompletedAt
+                                ? job.officeInfo.productionCompletedAt.toDate().toLocaleString('en-IN', {
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                    hour: '2-digit', minute: '2-digit',
+                                  })
+                                : '-'}
+                            </div>
                           )}
 
                           <div>

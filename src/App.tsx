@@ -425,7 +425,7 @@ function App() {
               user={currentUser}
               role="Sales Manager"
             >
-              <SalesManager />
+              <SalesManager user={currentUser} />
             </DepartmentRoute>
           }
         />

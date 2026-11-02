@@ -74,6 +74,7 @@ interface CuttingJob {
     cutting?: string | null
     cuttingUsername?: string | null
     cuttingBranch?: string | null
+    cuttingCompletedAt?: Timestamp | null
     printer?: string | null
     printerUsername?: string | null
     printBranch?: string | null
@@ -253,6 +254,10 @@ const createJob = (
       cutting: asString(office.cutting) || null,
       cuttingUsername: asString(office.cuttingUsername) || null,
       cuttingBranch: asString(office.cuttingBranch) || null,
+      cuttingCompletedAt:
+        office.cuttingCompletedAt instanceof Timestamp
+          ? office.cuttingCompletedAt
+          : null,
       printer: asString(office.printer) || null,
       printerUsername: asString(office.printerUsername) || null,
       printBranch: asString(office.printBranch) || null,
@@ -660,6 +665,9 @@ function Cutting({ user }: CuttingProps) {
         'statuses.cutting': 'Finished',
         'officeInfo.cutting': currentUser.name,
         'officeInfo.cuttingUsername': currentUser.username,
+        // Preserve an existing completion timestamp; otherwise record now.
+        'officeInfo.cuttingCompletedAt':
+          job.officeInfo.cuttingCompletedAt ?? Timestamp.now(),
       })
 
       setExpandedOrder(null)
