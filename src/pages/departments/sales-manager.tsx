@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react'
 import {
   collection,
@@ -21,11 +20,7 @@ interface SalesManagerProps {
 
 type JobStatus = 'Pending' | 'In Progress' | 'Finished'
 
-type DepartmentType =
-  | 'designer'
-  | 'printer'
-  | 'cutting'
-  | 'production'
+type DepartmentType = 'designer' | 'printer' | 'cutting' | 'production'
 
 interface JobItem {
   slNo?: number
@@ -55,6 +50,9 @@ interface JobRecord {
   date: string
   expectedDeliveryDate: string
   branch: string
+
+  // Bill number - no data yet, will be filled later
+  billNo?: string
 
   customer: {
     name: string
@@ -135,10 +133,7 @@ interface DepartmentRowWithFiles extends DepartmentRow {
 }
 
 const getString = (value: unknown): string => {
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number'
-  ) {
+  if (typeof value === 'string' || typeof value === 'number') {
     return String(value)
   }
 
@@ -148,37 +143,21 @@ const getString = (value: unknown): string => {
 const getNumber = (value: unknown): number => {
   const number = Number(value)
 
-  return Number.isFinite(number)
-    ? number
-    : 0
+  return Number.isFinite(number) ? number : 0
 }
 
-const getOptionalNumber = (
-  value: unknown,
-): number | undefined => {
-  if (
-    value === undefined ||
-    value === null ||
-    value === ''
-  ) {
+const getOptionalNumber = (value: unknown): number | undefined => {
+  if (value === undefined || value === null || value === '') {
     return undefined
   }
 
   const number = Number(value)
 
-  return Number.isFinite(number)
-    ? number
-    : undefined
+  return Number.isFinite(number) ? number : undefined
 }
 
-const getStatus = (
-  value: unknown,
-): JobStatus => {
-  if (
-    value === 'Pending' ||
-    value === 'In Progress' ||
-    value === 'Finished'
-  ) {
+const getStatus = (value: unknown): JobStatus => {
+  if (value === 'Pending' || value === 'In Progress' || value === 'Finished') {
     return value
   }
 
@@ -190,36 +169,25 @@ const createJobRecord = (
   data: any,
   source: 'job_order' | 'measurement',
 ): JobRecord => {
-  const rawItems = Array.isArray(data?.items)
-    ? data.items
-    : []
+  const rawItems = Array.isArray(data?.items) ? data.items : []
 
   const orderId =
-    getString(
-      data?.orderId ??
-        data?.measurementId ??
-        documentId,
-    ) || documentId
+    getString(data?.orderId ?? data?.measurementId ?? documentId) ||
+    documentId
 
   const officeInfo = data?.officeInfo || {}
   const customer = data?.customer || {}
   const adviser = data?.customerAdviser || {}
 
-  const productionStaff = Array.isArray(
-    officeInfo.productionStaff,
-  )
+  const productionStaff = Array.isArray(officeInfo.productionStaff)
     ? officeInfo.productionStaff
         .map((staff: any) => ({
           userId: getString(staff?.userId),
           name: getString(staff?.name),
-          username: getString(
-            staff?.username,
-          ),
+          username: getString(staff?.username),
         }))
         .filter(
-          (staff: ProductionStaff) =>
-            !!staff.name ||
-            !!staff.username,
+          (staff: ProductionStaff) => !!staff.name || !!staff.username,
         )
     : []
 
@@ -231,138 +199,57 @@ const createJobRecord = (
     date: getString(data?.date),
 
     expectedDeliveryDate: getString(
-      data?.expectedDeliveryDate ??
-        data?.deliveryDate,
+      data?.expectedDeliveryDate ?? data?.deliveryDate,
     ),
 
-    branch: getString(
-      data?.branch ??
-        data?.selectedBranch,
-    ),
+    branch: getString(data?.branch ?? data?.selectedBranch),
+
+    // No bill number data yet. Reads data.billNo if it exists later.
+    billNo: getString(data?.billNo),
 
     customer: {
       name: getString(customer?.name),
-
-      companyName: getString(
-        customer?.companyName,
-      ),
-
-      phoneNumber: getString(
-        customer?.phoneNumber,
-      ),
-
-      whatsappNumber: getString(
-        customer?.whatsappNumber,
-      ),
-
+      companyName: getString(customer?.companyName),
+      phoneNumber: getString(customer?.phoneNumber),
+      whatsappNumber: getString(customer?.whatsappNumber),
       place: getString(customer?.place),
     },
 
     items: rawItems.map((item: any) => ({
-      slNo:
-        typeof item?.slNo === 'number'
-          ? item.slNo
-          : undefined,
-
+      slNo: typeof item?.slNo === 'number' ? item.slNo : undefined,
       name: getString(item?.name),
-
       width: getString(item?.width),
-
       height: getString(item?.height),
-
       qty: getString(item?.qty),
-
       price: getString(item?.price),
-
-      remarks: getString(
-        item?.remarks,
-      ),
-
-      designStatus:
-        getString(
-          item?.designStatus,
-        ).toLowerCase(),
-
-      printStatus:
-        getString(
-          item?.printStatus,
-        ).toLowerCase(),
-
-      cuttingStatus:
-        getString(
-          item?.cuttingStatus,
-        ).toLowerCase(),
-
-      productionStatus:
-        getString(
-          item?.productionStatus,
-        ).toLowerCase(),
-
-      designCharge:
-        getOptionalNumber(
-          item?.designCharge,
-        ),
+      remarks: getString(item?.remarks),
+      designStatus: getString(item?.designStatus).toLowerCase(),
+      printStatus: getString(item?.printStatus).toLowerCase(),
+      cuttingStatus: getString(item?.cuttingStatus).toLowerCase(),
+      productionStatus: getString(item?.productionStatus).toLowerCase(),
+      designCharge: getOptionalNumber(item?.designCharge),
     })),
 
     officeInfo: {
-      designJob:
-        officeInfo?.designJob === true,
+      designJob: officeInfo?.designJob === true,
+      printJob: officeInfo?.printJob === true,
+      cuttingJob: officeInfo?.cuttingJob === true,
+      productionJob: officeInfo?.productionJob === true,
 
-      printJob:
-        officeInfo?.printJob === true,
+      designer: getString(officeInfo?.designer) || null,
+      designerUsername: getString(officeInfo?.designerUsername) || null,
 
-      cuttingJob:
-        officeInfo?.cuttingJob === true,
+      printer: getString(officeInfo?.printer) || null,
+      printerUsername: getString(officeInfo?.printerUsername) || null,
+      printBranch: getString(officeInfo?.printBranch) || null,
 
-      productionJob:
-        officeInfo?.productionJob === true,
-
-      designer:
-        getString(
-          officeInfo?.designer,
-        ) || null,
-
-      designerUsername:
-        getString(
-          officeInfo?.designerUsername,
-        ) || null,
-
-      printer:
-        getString(
-          officeInfo?.printer,
-        ) || null,
-
-      printerUsername:
-        getString(
-          officeInfo?.printerUsername,
-        ) || null,
-
-      printBranch:
-        getString(
-          officeInfo?.printBranch,
-        ) || null,
-
-      cutting:
-        getString(
-          officeInfo?.cutting,
-        ) || null,
-
-      cuttingUsername:
-        getString(
-          officeInfo?.cuttingUsername,
-        ) || null,
-
-      cuttingBranch:
-        getString(
-          officeInfo?.cuttingBranch,
-        ) || null,
+      cutting: getString(officeInfo?.cutting) || null,
+      cuttingUsername: getString(officeInfo?.cuttingUsername) || null,
+      cuttingBranch: getString(officeInfo?.cuttingBranch) || null,
 
       productionStaff,
 
-      productionBranch:
-        getString(
-          officeInfo?.productionBranch,
-        ) || null,
+      productionBranch: getString(officeInfo?.productionBranch) || null,
 
       printCompletedAt:
         officeInfo?.printCompletedAt instanceof Timestamp
@@ -381,69 +268,39 @@ const createJobRecord = (
     },
 
     customerAdviser: {
-      name: getString(
-        adviser?.name,
-      ),
-
-      username: getString(
-        adviser?.username,
-      ),
+      name: getString(adviser?.name),
+      username: getString(adviser?.username),
     },
 
-    acceptingOrder:
-      data?.acceptingOrder
-        ? {
-            name: getString(
-              data.acceptingOrder?.name,
-            ),
-
-            username: getString(
-              data.acceptingOrder?.username,
-            ),
-          }
-        : null,
+    acceptingOrder: data?.acceptingOrder
+      ? {
+          name: getString(data.acceptingOrder?.name),
+          username: getString(data.acceptingOrder?.username),
+        }
+      : null,
 
     statuses: {
-      design: getStatus(
-        data?.statuses?.design,
-      ),
-
-      print: getStatus(
-        data?.statuses?.print,
-      ),
-
-      cutting: getStatus(
-        data?.statuses?.cutting,
-      ),
-
-      production: getStatus(
-        data?.statuses?.production,
-      ),
+      design: getStatus(data?.statuses?.design),
+      print: getStatus(data?.statuses?.print),
+      cutting: getStatus(data?.statuses?.cutting),
+      production: getStatus(data?.statuses?.production),
     },
 
-    designCharge: getNumber(
-      data?.designCharge,
-    ),
+    designCharge: getNumber(data?.designCharge),
 
     designFinishedAt:
       data?.designFinishedAt instanceof Timestamp
         ? data.designFinishedAt
         : undefined,
 
-    designFinishedBy:
-      data?.designFinishedBy
-        ? {
-            name: getString(
-              data.designFinishedBy?.name,
-            ),
-            username: getString(
-              data.designFinishedBy?.username,
-            ),
-          }
-        : undefined,
+    designFinishedBy: data?.designFinishedBy
+      ? {
+          name: getString(data.designFinishedBy?.name),
+          username: getString(data.designFinishedBy?.username),
+        }
+      : undefined,
 
-    delivered:
-      data?.delivered === true,
+    delivered: data?.delivered === true,
   }
 }
 
@@ -451,51 +308,24 @@ const getDisplayName = (
   name?: string | null,
   username?: string | null,
 ): string => {
-  return (
-    name?.trim() ||
-    username?.trim() ||
-    'Unassigned'
-  )
+  return name?.trim() || username?.trim() || 'Unassigned'
 }
 
-const getSquareFeet = (
-  items: JobItem[],
-): number => {
-  return items.reduce(
-    (total, item) => {
-      const width = getNumber(
-        item?.width,
-      )
+const getSquareFeet = (items: JobItem[]): number => {
+  return items.reduce((total, item) => {
+    const width = getNumber(item?.width)
+    const height = getNumber(item?.height)
+    const qty = getNumber(item?.qty) || 1
 
-      const height = getNumber(
-        item?.height,
-      )
+    if (width <= 0 || height <= 0) {
+      return total
+    }
 
-      const qty =
-        getNumber(item?.qty) || 1
-
-      if (
-        width <= 0 ||
-        height <= 0
-      ) {
-        return total
-      }
-
-      return (
-        total +
-        (width *
-          height *
-          qty) /
-          144
-      )
-    },
-    0,
-  )
+    return total + (width * height * qty) / 144
+  }, 0)
 }
 
-const formatDate = (
-  value: string,
-): string => {
+const formatDate = (value: string): string => {
   if (!value) {
     return '-'
   }
@@ -512,22 +342,15 @@ const formatDate = (
     Number(parts[2]),
   )
 
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return value
   }
 
-  return date.toLocaleDateString(
-    'en-IN',
-    {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    },
-  )
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 const timestampDateKey = (value?: Timestamp): string => {
@@ -551,160 +374,85 @@ const isTimestampInRange = (
   return !!key && key >= from && key <= to
 }
 
-const sortRows = <
-  T extends { name: string },
->(
-  rows: T[],
-): T[] => {
-  return [...rows].sort(
-    (a, b) =>
-      a.name.localeCompare(
-        b.name,
-      ),
-  )
+const sortRows = <T extends { name: string }>(rows: T[]): T[] => {
+  return [...rows].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-function SalesManager({
-  user,
-}: SalesManagerProps) {
+function SalesManager({ user }: SalesManagerProps) {
   const navigate = useNavigate()
 
   const today = new Date()
 
   const todayKey = [
     today.getFullYear(),
-    String(
-      today.getMonth() + 1,
-    ).padStart(2, '0'),
-    String(
-      today.getDate(),
-    ).padStart(2, '0'),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
   ].join('-')
 
-  const [dateFrom, setDateFrom] =
-    useState(todayKey)
-
-  const [dateTo, setDateTo] =
-    useState(todayKey)
-
-  const [jobs, setJobs] =
-    useState<JobRecord[]>([])
-
-  const [loading, setLoading] =
-    useState(true)
-
-  const [error, setError] =
-    useState('')
-
-  const [
-    viewDepartment,
-    setViewDepartment,
-  ] =
-    useState<DepartmentType | null>(
-      null,
-    )
-
-  const [viewRow, setViewRow] =
-    useState<
-      DepartmentRowWithFiles | null
-    >(null)
+  const [dateFrom, setDateFrom] = useState(todayKey)
+  const [dateTo, setDateTo] = useState(todayKey)
+  const [jobs, setJobs] = useState<JobRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [viewDepartment, setViewDepartment] =
+    useState<DepartmentType | null>(null)
+  const [viewRow, setViewRow] = useState<DepartmentRowWithFiles | null>(null)
 
   useEffect(() => {
     let jobOrders: JobRecord[] = []
     let measurements: JobRecord[] = []
 
     const publish = () => {
-      setJobs([
-        ...jobOrders,
-        ...measurements,
-      ])
-
+      setJobs([...jobOrders, ...measurements])
       setLoading(false)
       setError('')
     }
 
     const jobOrdersQuery = query(
-      collection(
-        db,
-        'job_orders',
-      ),
-      orderBy(
-        'createdAt',
-        'desc',
-      ),
+      collection(db, 'job_orders'),
+      orderBy('createdAt', 'desc'),
     )
 
-    const measurementsQuery =
-      query(
-        collection(
-          db,
-          'measurements',
-        ),
-        orderBy(
-          'createdAt',
-          'desc',
-        ),
-      )
+    const measurementsQuery = query(
+      collection(db, 'measurements'),
+      orderBy('createdAt', 'desc'),
+    )
 
-    const unsubscribeJobOrders =
-      onSnapshot(
-        jobOrdersQuery,
-        (snapshot) => {
-          jobOrders =
-            snapshot.docs.map(
-              (document) =>
-                createJobRecord(
-                  document.id,
-                  document.data(),
-                  'job_order',
-                ),
-            )
+    const unsubscribeJobOrders = onSnapshot(
+      jobOrdersQuery,
+      (snapshot) => {
+        jobOrders = snapshot.docs.map((document) =>
+          createJobRecord(document.id, document.data(), 'job_order'),
+        )
 
-          publish()
-        },
-        (firebaseError) => {
-          console.error(
-            'Sales Manager job_orders error:',
-            firebaseError,
-          )
+        publish()
+      },
+      (firebaseError) => {
+        console.error('Sales Manager job_orders error:', firebaseError)
 
-          setError(
-            `Unable to load job orders: ${firebaseError.message}`,
-          )
+        setError(`Unable to load job orders: ${firebaseError.message}`)
 
-          setLoading(false)
-        },
-      )
+        setLoading(false)
+      },
+    )
 
-    const unsubscribeMeasurements =
-      onSnapshot(
-        measurementsQuery,
-        (snapshot) => {
-          measurements =
-            snapshot.docs.map(
-              (document) =>
-                createJobRecord(
-                  document.id,
-                  document.data(),
-                  'measurement',
-                ),
-            )
+    const unsubscribeMeasurements = onSnapshot(
+      measurementsQuery,
+      (snapshot) => {
+        measurements = snapshot.docs.map((document) =>
+          createJobRecord(document.id, document.data(), 'measurement'),
+        )
 
-          publish()
-        },
-        (firebaseError) => {
-          console.error(
-            'Sales Manager measurements error:',
-            firebaseError,
-          )
+        publish()
+      },
+      (firebaseError) => {
+        console.error('Sales Manager measurements error:', firebaseError)
 
-          setError(
-            `Unable to load measurements: ${firebaseError.message}`,
-          )
+        setError(`Unable to load measurements: ${firebaseError.message}`)
 
-          setLoading(false)
-        },
-      )
+        setLoading(false)
+      },
+    )
 
     return () => {
       unsubscribeJobOrders()
@@ -712,98 +460,52 @@ function SalesManager({
     }
   }, [])
 
-  const validRange =
-    !!dateFrom &&
-    !!dateTo &&
-    dateFrom <= dateTo
+  const validRange = !!dateFrom && !!dateTo && dateFrom <= dateTo
 
-  const jobsInRange =
-    useMemo(() => {
-      if (!validRange) {
-        return []
+  const jobsInRange = useMemo(() => {
+    if (!validRange) {
+      return []
+    }
+
+    return jobs.filter((job) => {
+      if (!job.date) {
+        return false
       }
 
-      return jobs.filter(
-        (job) => {
-          if (!job.date) {
-            return false
-          }
-
-          return (
-            job.date >=
-              dateFrom &&
-            job.date <= dateTo
-          )
-        },
-      )
-    }, [
-      jobs,
-      dateFrom,
-      dateTo,
-      validRange,
-    ])
+      return job.date >= dateFrom && job.date <= dateTo
+    })
+  }, [jobs, dateFrom, dateTo, validRange])
 
   /*
    * DESIGNER
-   */
-  /*
-   * DESIGNER
    *
-   * Designer performance is filtered by the
-   * exact designFinishedAt timestamp saved when
-   * Finish Design was pressed.
+   * Designer performance is filtered by the exact designFinishedAt
+   * timestamp saved when Finish Design was pressed.
    *
-   * This is intentionally different from the
-   * general jobsInRange filter, which uses the
-   * original job/measurement date.
+   * This is intentionally different from the general jobsInRange
+   * filter, which uses the original job/measurement date.
    */
-  const designerJobsInRange =
-    useMemo(() => {
-      if (!validRange) {
-        return []
+  const designerJobsInRange = useMemo(() => {
+    if (!validRange) {
+      return []
+    }
+
+    return jobs.filter((job) => {
+      if (!job.designFinishedAt || !job.designFinishedAt.toDate) {
+        return false
       }
 
-      return jobs.filter((job) => {
-        if (
-          !job.designFinishedAt ||
-          !job.designFinishedAt.toDate
-        ) {
-          return false
-        }
+      const finishedDate = job.designFinishedAt.toDate()
 
-        const finishedDate =
-          job.designFinishedAt
-            .toDate()
+      const year = finishedDate.getFullYear()
+      const month = String(finishedDate.getMonth() + 1).padStart(2, '0')
+      const day = String(finishedDate.getDate()).padStart(2, '0')
 
-        const year =
-          finishedDate.getFullYear()
+      const finishedDateKey = `${year}-${month}-${day}`
 
-        const month =
-          String(
-            finishedDate.getMonth() + 1,
-          ).padStart(2, '0')
-
-        const day =
-          String(
-            finishedDate.getDate(),
-          ).padStart(2, '0')
-
-        const finishedDateKey =
-          `${year}-${month}-${day}`
-
-        return (
-          finishedDateKey >=
-            dateFrom &&
-          finishedDateKey <=
-            dateTo
-        )
-      })
-    }, [
-      jobs,
-      dateFrom,
-      dateTo,
-      validRange,
-    ])
+      return finishedDateKey >= dateFrom && finishedDateKey <= dateTo
+    })
+  }, [jobs, dateFrom, dateTo, validRange])
 
   const printerJobsInRange = useMemo(() => {
     if (!validRange) return []
@@ -822,389 +524,221 @@ function SalesManager({
   const productionJobsInRange = useMemo(() => {
     if (!validRange) return []
     return jobs.filter((job) =>
-      isTimestampInRange(job.officeInfo.productionCompletedAt, dateFrom, dateTo),
+      isTimestampInRange(
+        job.officeInfo.productionCompletedAt,
+        dateFrom,
+        dateTo,
+      ),
     )
   }, [jobs, dateFrom, dateTo, validRange])
 
-  const designerRows =
-    useMemo<
-      DepartmentRowWithFiles[]
-    >(() => {
-      const map =
-        new Map<
-          string,
-          DepartmentRowWithFiles
-        >()
+  const designerRows = useMemo<DepartmentRowWithFiles[]>(() => {
+    const map = new Map<string, DepartmentRowWithFiles>()
 
-      designerJobsInRange.forEach(
-        (job) => {
-          if (
-            !job.officeInfo
-              .designJob ||
-            job.statuses.design !==
-              'Finished'
-          ) {
-            return
-          }
+    designerJobsInRange.forEach((job) => {
+      if (!job.officeInfo.designJob || job.statuses.design !== 'Finished') {
+        return
+      }
 
-          const name =
-            getDisplayName(
-              job.officeInfo
-                .designer,
-              job.officeInfo
-                .designerUsername,
-            )
-
-          const username =
-            job.officeInfo
-              .designerUsername ||
-            ''
-
-          const key =
-            username ||
-            name.toLowerCase()
-
-          const current =
-            map.get(key) || {
-              name,
-              username,
-              completedWorks: 0,
-              totalDesignCharge: 0,
-              files: [],
-            }
-
-          current.completedWorks += 1
-
-          current.totalDesignCharge =
-            (current.totalDesignCharge ||
-              0) +
-            job.designCharge
-
-          const completedItems =
-            job.items.filter(
-              (item) =>
-                item.designStatus !==
-                  'na' &&
-                item.designStatus !==
-                  'NA' &&
-                item.designStatus !==
-                  'not applicable',
-            )
-
-          current.files.push({
-            job,
-            completedItems,
-          })
-
-          map.set(
-            key,
-            current,
-          )
-        },
+      const name = getDisplayName(
+        job.officeInfo.designer,
+        job.officeInfo.designerUsername,
       )
 
-      return sortRows(
-        Array.from(
-          map.values(),
-        ),
+      const username = job.officeInfo.designerUsername || ''
+
+      const key = username || name.toLowerCase()
+
+      const current = map.get(key) || {
+        name,
+        username,
+        completedWorks: 0,
+        totalDesignCharge: 0,
+        files: [],
+      }
+
+      current.completedWorks += 1
+
+      current.totalDesignCharge =
+        (current.totalDesignCharge || 0) + job.designCharge
+
+      const completedItems = job.items.filter(
+        (item) =>
+          item.designStatus !== 'na' &&
+          item.designStatus !== 'NA' &&
+          item.designStatus !== 'not applicable',
       )
-    }, [designerJobsInRange])
+
+      current.files.push({ job, completedItems })
+
+      map.set(key, current)
+    })
+
+    return sortRows(Array.from(map.values()))
+  }, [designerJobsInRange])
 
   /*
    * PRINTER
    */
-  const printerRows =
-    useMemo<
-      DepartmentRowWithFiles[]
-    >(() => {
-      const map =
-        new Map<
-          string,
-          DepartmentRowWithFiles
-        >()
+  const printerRows = useMemo<DepartmentRowWithFiles[]>(() => {
+    const map = new Map<string, DepartmentRowWithFiles>()
 
-      printerJobsInRange.forEach(
-        (job) => {
-          if (
-            !job.officeInfo
-              .printJob ||
-            job.statuses.print !==
-              'Finished'
-          ) {
-            return
-          }
+    printerJobsInRange.forEach((job) => {
+      if (!job.officeInfo.printJob || job.statuses.print !== 'Finished') {
+        return
+      }
 
-          const name =
-            getDisplayName(
-              job.officeInfo
-                .printer,
-              job.officeInfo
-                .printerUsername,
-            )
-
-          const username =
-            job.officeInfo
-              .printerUsername ||
-            ''
-
-          const key =
-            username ||
-            name.toLowerCase()
-
-          const current =
-            map.get(key) || {
-              name,
-              username,
-              completedWorks: 0,
-              totalSquareFeet: 0,
-              files: [],
-            }
-
-          current.completedWorks += 1
-
-          current.totalSquareFeet =
-            (current.totalSquareFeet ||
-              0) +
-            getSquareFeet(
-              job.items,
-            )
-
-          current.files.push({
-            job,
-            completedItems:
-              job.items.filter(
-                (item) =>
-                  item.cuttingStatus !==
-                    'na' &&
-                  item.cuttingStatus !==
-                    'NA' &&
-                  item.cuttingStatus !==
-                    'not applicable',
-              ),
-          })
-
-          map.set(
-            key,
-            current,
-          )
-        },
+      const name = getDisplayName(
+        job.officeInfo.printer,
+        job.officeInfo.printerUsername,
       )
 
-      return sortRows(
-        Array.from(
-          map.values(),
+      const username = job.officeInfo.printerUsername || ''
+
+      const key = username || name.toLowerCase()
+
+      const current = map.get(key) || {
+        name,
+        username,
+        completedWorks: 0,
+        totalSquareFeet: 0,
+        files: [],
+      }
+
+      current.completedWorks += 1
+
+      current.totalSquareFeet =
+        (current.totalSquareFeet || 0) + getSquareFeet(job.items)
+
+      current.files.push({
+        job,
+        completedItems: job.items.filter(
+          (item) =>
+            item.cuttingStatus !== 'na' &&
+            item.cuttingStatus !== 'NA' &&
+            item.cuttingStatus !== 'not applicable',
         ),
-      )
-    }, [printerJobsInRange])
+      })
+
+      map.set(key, current)
+    })
+
+    return sortRows(Array.from(map.values()))
+  }, [printerJobsInRange])
 
   /*
    * CUTTING
    */
-  const cuttingRows =
-    useMemo<
-      DepartmentRowWithFiles[]
-    >(() => {
-      const map =
-        new Map<
-          string,
-          DepartmentRowWithFiles
-        >()
+  const cuttingRows = useMemo<DepartmentRowWithFiles[]>(() => {
+    const map = new Map<string, DepartmentRowWithFiles>()
 
-      cuttingJobsInRange.forEach(
-        (job) => {
-          if (
-            !job.officeInfo
-              .cuttingJob ||
-            job.statuses.cutting !==
-              'Finished'
-          ) {
-            return
-          }
+    cuttingJobsInRange.forEach((job) => {
+      if (!job.officeInfo.cuttingJob || job.statuses.cutting !== 'Finished') {
+        return
+      }
 
-          const name =
-            getDisplayName(
-              job.officeInfo
-                .cutting,
-              job.officeInfo
-                .cuttingUsername,
-            )
-
-          const username =
-            job.officeInfo
-              .cuttingUsername ||
-            ''
-
-          const key =
-            username ||
-            name.toLowerCase()
-
-          const current =
-            map.get(key) || {
-              name,
-              username,
-              completedWorks: 0,
-              totalSquareFeet: 0,
-              files: [],
-            }
-
-          current.completedWorks += 1
-
-          current.totalSquareFeet =
-            (current.totalSquareFeet ||
-              0) +
-            getSquareFeet(
-              job.items,
-            )
-
-          current.files.push({
-            job,
-            completedItems:
-              job.items.filter(
-                (item) =>
-                  item.printStatus !==
-                    'na' &&
-                  item.printStatus !==
-                    'NA' &&
-                  item.printStatus !==
-                    'not applicable',
-              ),
-          })
-
-          map.set(
-            key,
-            current,
-          )
-        },
+      const name = getDisplayName(
+        job.officeInfo.cutting,
+        job.officeInfo.cuttingUsername,
       )
 
-      return sortRows(
-        Array.from(
-          map.values(),
+      const username = job.officeInfo.cuttingUsername || ''
+
+      const key = username || name.toLowerCase()
+
+      const current = map.get(key) || {
+        name,
+        username,
+        completedWorks: 0,
+        totalSquareFeet: 0,
+        files: [],
+      }
+
+      current.completedWorks += 1
+
+      current.totalSquareFeet =
+        (current.totalSquareFeet || 0) + getSquareFeet(job.items)
+
+      current.files.push({
+        job,
+        completedItems: job.items.filter(
+          (item) =>
+            item.printStatus !== 'na' &&
+            item.printStatus !== 'NA' &&
+            item.printStatus !== 'not applicable',
         ),
-      )
-    }, [cuttingJobsInRange])
+      })
+
+      map.set(key, current)
+    })
+
+    return sortRows(Array.from(map.values()))
+  }, [cuttingJobsInRange])
 
   /*
    * PRODUCTION
    */
-  const productionRows =
-    useMemo<
-      DepartmentRowWithFiles[]
-    >(() => {
-      const map =
-        new Map<
-          string,
-          DepartmentRowWithFiles
-        >()
+  const productionRows = useMemo<DepartmentRowWithFiles[]>(() => {
+    const map = new Map<string, DepartmentRowWithFiles>()
 
-      productionJobsInRange.forEach(
-        (job) => {
-          if (
-            !job.officeInfo
-              .productionJob ||
-            job.statuses
-              .production !==
-              'Finished'
-          ) {
-            return
-          }
+    productionJobsInRange.forEach((job) => {
+      if (
+        !job.officeInfo.productionJob ||
+        job.statuses.production !== 'Finished'
+      ) {
+        return
+      }
 
-          const staff =
-            job.officeInfo
-              .productionStaff
+      const staff = job.officeInfo.productionStaff
 
-          if (
-            staff.length === 0
-          ) {
-            const current =
-              map.get(
-                'unassigned',
-              ) || {
-                name: 'Unassigned',
-                username: '',
-                completedWorks: 0,
-                files: [],
-              }
-
-            current.completedWorks += 1
-
-            current.files.push({
-              job,
-              completedItems:
-                job.items.filter(
-                  (item) =>
-                    item.productionStatus !==
-                      'na' &&
-                    item.productionStatus !==
-                      'NA' &&
-                    item.productionStatus !==
-                      'not applicable',
-                ),
-            })
-
-            map.set(
-              'unassigned',
-              current,
-            )
-
-            return
-          }
-
-          staff.forEach(
-            (member) => {
-              const name =
-                getDisplayName(
-                  member.name,
-                  member.username,
-                )
-
-              const username =
-                member.username ||
-                ''
-
-              const key =
-                username ||
-                name.toLowerCase()
-
-              const current =
-                map.get(key) || {
-                  name,
-                  username,
-                  completedWorks: 0,
-                  files: [],
-                }
-
-              current.completedWorks += 1
-
-              current.files.push({
-                job,
-                completedItems:
-                  job.items.filter(
-                    (item) =>
-                      item.productionStatus !==
-                        'na' &&
-                      item.productionStatus !==
-                        'NA' &&
-                      item.productionStatus !==
-                        'not applicable',
-                  ),
-              })
-
-              map.set(
-                key,
-                current,
-              )
-            },
-          )
-        },
+      const completedItems = job.items.filter(
+        (item) =>
+          item.productionStatus !== 'na' &&
+          item.productionStatus !== 'NA' &&
+          item.productionStatus !== 'not applicable',
       )
 
-      return sortRows(
-        Array.from(
-          map.values(),
-        ),
-      )
-    }, [productionJobsInRange])
+      if (staff.length === 0) {
+        const current = map.get('unassigned') || {
+          name: 'Unassigned',
+          username: '',
+          completedWorks: 0,
+          files: [],
+        }
+
+        current.completedWorks += 1
+
+        current.files.push({ job, completedItems })
+
+        map.set('unassigned', current)
+
+        return
+      }
+
+      staff.forEach((member) => {
+        const name = getDisplayName(member.name, member.username)
+
+        const username = member.username || ''
+
+        const key = username || name.toLowerCase()
+
+        const current = map.get(key) || {
+          name,
+          username,
+          completedWorks: 0,
+          files: [],
+        }
+
+        current.completedWorks += 1
+
+        current.files.push({ job, completedItems })
+
+        map.set(key, current)
+      })
+    })
+
+    return sortRows(Array.from(map.values()))
+  }, [productionJobsInRange])
 
   const clearDates = () => {
     setDateFrom('')
@@ -1213,8 +747,7 @@ function SalesManager({
 
   const tableEmpty = (
     <div className="empty-items">
-      No completed work found for the
-      selected date range.
+      No completed work found for the selected date range.
     </div>
   )
 
@@ -1223,20 +756,36 @@ function SalesManager({
     setViewDepartment(null)
   }
 
+  // Designer view: group the selected designer's files by the day the
+  // design was finished, so each day gets its own table (oldest first).
+  const designerDayGroups = useMemo(() => {
+    if (!viewRow || viewDepartment !== 'designer') {
+      return []
+    }
+
+    const map = new Map<string, CompletedFile[]>()
+
+    viewRow.files.forEach((file) => {
+      const key = timestampDateKey(file.job.designFinishedAt) || 'unknown'
+      const list = map.get(key) || []
+      list.push(file)
+      map.set(key, list)
+    })
+
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dateKey, files]) => ({ dateKey, files }))
+  }, [viewRow, viewDepartment])
+
   if (loading) {
     return (
       <div className="department-page">
         <div className="department-container">
           <div className="department-header">
             <div>
-              <h1>
-                Sales Manager Dashboard
-              </h1>
+              <h1>Sales Manager Dashboard</h1>
 
-              <p>
-                Loading department
-                performance...
-              </p>
+              <p>Loading department performance...</p>
             </div>
           </div>
         </div>
@@ -1247,24 +796,14 @@ function SalesManager({
   return (
     <div className="department-page">
       <div className="department-container">
-
         {/* HEADER */}
         <div className="department-header">
           <div>
-            <h1>
-              Sales Manager Dashboard
-            </h1>
+            <h1>Sales Manager Dashboard</h1>
 
-            <p>
-              Department performance from
-              Sales job information
-            </p>
+            <p>Department performance from Sales job information</p>
 
-            {user?.name && (
-              <small>
-                Logged in as {user.name}
-              </small>
-            )}
+            {user?.name && <small>Logged in as {user.name}</small>}
           </div>
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -1278,70 +817,46 @@ function SalesManager({
           </div>
         </div>
 
-        {error && (
-          <div className="form-message">
-            {error}
-          </div>
-        )}
+        {error && <div className="form-message">{error}</div>}
 
         {/* DATE FILTER */}
         <section className="department-section">
           <div className="section-heading-row">
             <div>
-              <h2>
-                Performance Date Range
-              </h2>
+              <h2>Performance Date Range</h2>
 
               <p>
-                Only Date From and Date To
-                are used. No single-day
-                filter.
+                Only Date From and Date To are used. No single-day filter.
               </p>
             </div>
           </div>
 
           <div className="form-grid">
             <div className="input-group">
-              <label htmlFor="sales-manager-date-from">
-                Date From
-              </label>
+              <label htmlFor="sales-manager-date-from">Date From</label>
 
               <input
                 id="sales-manager-date-from"
                 type="date"
                 value={dateFrom}
-                onChange={(event) =>
-                  setDateFrom(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => setDateFrom(event.target.value)}
               />
             </div>
 
             <div className="input-group">
-              <label htmlFor="sales-manager-date-to">
-                Date To
-              </label>
+              <label htmlFor="sales-manager-date-to">Date To</label>
 
               <input
                 id="sales-manager-date-to"
                 type="date"
                 value={dateTo}
-                onChange={(event) =>
-                  setDateTo(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => setDateTo(event.target.value)}
               />
             </div>
 
             <div
               className="input-group"
-              style={{
-                display: 'flex',
-                alignItems:
-                  'flex-end',
-              }}
+              style={{ display: 'flex', alignItems: 'flex-end' }}
             >
               <button
                 type="button"
@@ -1354,47 +869,23 @@ function SalesManager({
           </div>
 
           {!validRange && (
-            <div
-              className="form-message"
-              style={{
-                marginTop: '15px',
-              }}
-            >
-              Please select a valid date
-              range.
+            <div className="form-message" style={{ marginTop: '15px' }}>
+              Please select a valid date range.
             </div>
           )}
 
           {validRange && (
-            <div
-              className="statistics-filter-bar"
-              style={{
-                marginTop: '15px',
-              }}
-            >
+            <div className="statistics-filter-bar" style={{ marginTop: '15px' }}>
               <span>
-                <strong>
-                  From:
-                </strong>{' '}
-                {formatDate(
-                  dateFrom,
-                )}
+                <strong>From:</strong> {formatDate(dateFrom)}
               </span>
 
               <span>
-                <strong>
-                  To:
-                </strong>{' '}
-                {formatDate(
-                  dateTo,
-                )}
+                <strong>To:</strong> {formatDate(dateTo)}
               </span>
 
               <span>
-                <strong>
-                  Records:
-                </strong>{' '}
-                {jobsInRange.length}
+                <strong>Records:</strong> {jobsInRange.length}
               </span>
             </div>
           )}
@@ -1404,16 +895,11 @@ function SalesManager({
         <section className="department-section">
           <div className="section-heading-row">
             <div>
-              <h2>
-                1. Designer Performance
-              </h2>
+              <h2>1. Designer Performance</h2>
 
               <p>
-                Designer name, completed
-                works and total design
-                charge. Date range is based on
-                the exact Design Finished
-                timestamp.
+                Designer name, completed works and total design charge. Date
+                range is based on the exact Design Finished timestamp.
               </p>
             </div>
           </div>
@@ -1427,71 +913,43 @@ function SalesManager({
                   <tr>
                     <th>Designer</th>
                     <th>Username</th>
-                    <th>
-                      Completed Works
-                    </th>
-                    <th>
-                      Total Design Charge
-                    </th>
+                    <th>Completed Works</th>
+                    <th>Total Design Charge</th>
                     <th>View</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {designerRows.map(
-                    (row) => (
-                      <tr
-                        key={`${row.username}-${row.name}`}
-                      >
-                        <td>
-                          {row.name}
-                        </td>
+                  {designerRows.map((row) => (
+                    <tr key={`${row.username}-${row.name}`}>
+                      <td>{row.name}</td>
 
-                        <td>
-                          {row.username ||
-                            '-'}
-                        </td>
+                      <td>{row.username || '-'}</td>
 
-                        <td>
-                          {
-                            row.completedWorks
-                          }
-                        </td>
+                      <td>{row.completedWorks}</td>
 
-                        <td>
-                          ₹
-                          {(
-                            row.totalDesignCharge ||
-                            0
-                          ).toLocaleString(
-                            'en-IN',
-                            {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            },
-                          )}
-                        </td>
+                      <td>
+                        ₹
+                        {(row.totalDesignCharge || 0).toLocaleString('en-IN', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
 
-                        <td>
-                          <button
-                            type="button"
-                            className="add-item-button"
-                            onClick={() => {
-                              setViewDepartment(
-                                'designer',
-                              )
-
-                              setViewRow(
-                                row,
-                              )
-                            }}
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ),
-                  )}
+                      <td>
+                        <button
+                          type="button"
+                          className="add-item-button"
+                          onClick={() => {
+                            setViewDepartment('designer')
+                            setViewRow(row)
+                          }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1502,12 +960,11 @@ function SalesManager({
         <section className="department-section">
           <div className="section-heading-row">
             <div>
-              <h2>
-                2. Printer Performance
-              </h2>
+              <h2>2. Printer Performance</h2>
 
               <p>
-                Printer name, completed works and total square feet. Date range uses Print Finished date.
+                Printer name, completed works and total square feet. Date
+                range uses Print Finished date.
               </p>
             </div>
           </div>
@@ -1521,67 +978,37 @@ function SalesManager({
                   <tr>
                     <th>Printer</th>
                     <th>Username</th>
-                    <th>
-                      Completed Works
-                    </th>
-                    <th>
-                      Total Square Feet
-                    </th>
+                    <th>Completed Works</th>
+                    <th>Total Square Feet</th>
                     <th>View</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {printerRows.map(
-                    (row) => (
-                      <tr
-                        key={`${row.username}-${row.name}`}
-                      >
-                        <td>
-                          {row.name}
-                        </td>
+                  {printerRows.map((row) => (
+                    <tr key={`${row.username}-${row.name}`}>
+                      <td>{row.name}</td>
 
-                        <td>
-                          {row.username ||
-                            '-'}
-                        </td>
+                      <td>{row.username || '-'}</td>
 
-                        <td>
-                          {
-                            row.completedWorks
-                          }
-                        </td>
+                      <td>{row.completedWorks}</td>
 
-                        <td>
-                          {(
-                            row.totalSquareFeet ||
-                            0
-                          ).toFixed(
-                            2,
-                          )}{' '}
-                          sq ft
-                        </td>
+                      <td>{(row.totalSquareFeet || 0).toFixed(2)} sq ft</td>
 
-                        <td>
-                          <button
-                            type="button"
-                            className="add-item-button"
-                            onClick={() => {
-                              setViewDepartment(
-                                'printer',
-                              )
-
-                              setViewRow(
-                                row,
-                              )
-                            }}
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ),
-                  )}
+                      <td>
+                        <button
+                          type="button"
+                          className="add-item-button"
+                          onClick={() => {
+                            setViewDepartment('printer')
+                            setViewRow(row)
+                          }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1592,12 +1019,11 @@ function SalesManager({
         <section className="department-section">
           <div className="section-heading-row">
             <div>
-              <h2>
-                3. Cutting Performance
-              </h2>
+              <h2>3. Cutting Performance</h2>
 
               <p>
-                Cutting staff, completed works and total square feet. Date range uses Cutting Finished date.
+                Cutting staff, completed works and total square feet. Date
+                range uses Cutting Finished date.
               </p>
             </div>
           </div>
@@ -1609,77 +1035,39 @@ function SalesManager({
               <table className="items-table">
                 <thead>
                   <tr>
-                    <th>
-                      Cutting Staff
-                    </th>
-
-                    <th>
-                      Username
-                    </th>
-
-                    <th>
-                      Completed Works
-                    </th>
-
-                    <th>
-                      Total Square Feet
-                    </th>
-
+                    <th>Cutting Staff</th>
+                    <th>Username</th>
+                    <th>Completed Works</th>
+                    <th>Total Square Feet</th>
                     <th>View</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {cuttingRows.map(
-                    (row) => (
-                      <tr
-                        key={`${row.username}-${row.name}`}
-                      >
-                        <td>
-                          {row.name}
-                        </td>
+                  {cuttingRows.map((row) => (
+                    <tr key={`${row.username}-${row.name}`}>
+                      <td>{row.name}</td>
 
-                        <td>
-                          {row.username ||
-                            '-'}
-                        </td>
+                      <td>{row.username || '-'}</td>
 
-                        <td>
-                          {
-                            row.completedWorks
-                          }
-                        </td>
+                      <td>{row.completedWorks}</td>
 
-                        <td>
-                          {(
-                            row.totalSquareFeet ||
-                            0
-                          ).toFixed(
-                            2,
-                          )}{' '}
-                          sq ft
-                        </td>
+                      <td>{(row.totalSquareFeet || 0).toFixed(2)} sq ft</td>
 
-                        <td>
-                          <button
-                            type="button"
-                            className="add-item-button"
-                            onClick={() => {
-                              setViewDepartment(
-                                'cutting',
-                              )
-
-                              setViewRow(
-                                row,
-                              )
-                            }}
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ),
-                  )}
+                      <td>
+                        <button
+                          type="button"
+                          className="add-item-button"
+                          onClick={() => {
+                            setViewDepartment('cutting')
+                            setViewRow(row)
+                          }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1690,12 +1078,11 @@ function SalesManager({
         <section className="department-section">
           <div className="section-heading-row">
             <div>
-              <h2>
-                4. Production Performance
-              </h2>
+              <h2>4. Production Performance</h2>
 
               <p>
-                Production staff and completed works. Date range uses Production Completed date.
+                Production staff and completed works. Date range uses
+                Production Completed date.
               </p>
             </div>
           </div>
@@ -1707,63 +1094,36 @@ function SalesManager({
               <table className="items-table">
                 <thead>
                   <tr>
-                    <th>
-                      Production Staff
-                    </th>
-
-                    <th>
-                      Username
-                    </th>
-
-                    <th>
-                      Completed Works
-                    </th>
-
+                    <th>Production Staff</th>
+                    <th>Username</th>
+                    <th>Completed Works</th>
                     <th>View</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {productionRows.map(
-                    (row) => (
-                      <tr
-                        key={`${row.username}-${row.name}`}
-                      >
-                        <td>
-                          {row.name}
-                        </td>
+                  {productionRows.map((row) => (
+                    <tr key={`${row.username}-${row.name}`}>
+                      <td>{row.name}</td>
 
-                        <td>
-                          {row.username ||
-                            '-'}
-                        </td>
+                      <td>{row.username || '-'}</td>
 
-                        <td>
-                          {
-                            row.completedWorks
-                          }
-                        </td>
+                      <td>{row.completedWorks}</td>
 
-                        <td>
-                          <button
-                            type="button"
-                            className="add-item-button"
-                            onClick={() => {
-                              setViewDepartment(
-                                'production',
-                              )
-
-                              setViewRow(
-                                row,
-                              )
-                            }}
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ),
-                  )}
+                      <td>
+                        <button
+                          type="button"
+                          className="add-item-button"
+                          onClick={() => {
+                            setViewDepartment('production')
+                            setViewRow(row)
+                          }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1771,483 +1131,367 @@ function SalesManager({
         </section>
 
         {/* VIEW MODAL */}
-        {viewRow &&
-          viewDepartment && (
+        {viewRow && viewDepartment && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.55)',
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+            }}
+            onClick={closeView}
+          >
             <div
               style={{
-                position: 'fixed',
-                inset: 0,
-                background:
-                  'rgba(0,0,0,0.55)',
-                zIndex: 9999,
-                display: 'flex',
-                alignItems:
-                  'center',
-                justifyContent:
-                  'center',
-                padding: '20px',
+                background: '#fff',
+                borderRadius: '14px',
+                width: 'min(1100px, 96vw)',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                padding: '24px',
               }}
-              onClick={
-                closeView
-              }
+              onClick={(event) => event.stopPropagation()}
             >
+              {/* MODAL HEADER */}
               <div
-                style={{
-                  background:
-                    '#fff',
-                  borderRadius:
-                    '14px',
-                  width:
-                    'min(1100px, 96vw)',
-                  maxHeight:
-                    '90vh',
-                  overflowY:
-                    'auto',
-                  padding:
-                    '24px',
-                }}
-                onClick={(
-                  event,
-                ) =>
-                  event.stopPropagation()
-                }
+                className="section-heading-row"
+                style={{ marginBottom: '20px' }}
               >
-                {/* MODAL HEADER */}
-                <div
-                  className="section-heading-row"
-                  style={{
-                    marginBottom:
-                      '20px',
-                  }}
-                >
-                  <div>
-                    <h2>
-                      Completed Files
-                      {' — '}
-                      {viewRow.name}
-                    </h2>
+                <div>
+                  <h2>
+                    Completed Files
+                    {' — '}
+                    {viewRow.name}
+                  </h2>
 
-                    <p>
-                      {
-                        viewRow.completedWorks
-                      }{' '}
-                      completed
-                      file(s)
-
-                      {viewRow.username
-                        ? ` • ${viewRow.username}`
-                        : ''}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="clear-filter-button"
-                    onClick={
-                      closeView
-                    }
-                  >
-                    Close
-                  </button>
+                  <p>
+                    {viewRow.completedWorks} completed file(s)
+                    {viewRow.username ? ` • ${viewRow.username}` : ''}
+                  </p>
                 </div>
 
-                {/* FILES */}
-                {viewRow.files.length ===
-                0 ? (
-                  <div className="empty-items">
-                    No completed
-                    files found.
-                  </div>
-                ) : (
-                  viewRow.files.map(
-                    (
-                      {
-                        job,
-                        completedItems,
-                      },
-                      fileIndex,
-                    ) => (
-                      <div
-                        key={`${job.source}-${job.id}`}
-                        style={{
-                          border:
-                            '1px solid #ddd',
-                          borderRadius:
-                            '10px',
-                          padding:
-                            '16px',
-                          marginBottom:
-                            '14px',
-                        }}
-                      >
-                        {/* FILE INFO */}
-                        <div
-                          style={{
-                            display:
-                              'grid',
-                            gridTemplateColumns:
-                              'repeat(auto-fit, minmax(180px, 1fr))',
-                            gap: '10px',
-                            marginBottom:
-                              '14px',
-                          }}
-                        >
-                          <div>
-                            <strong>
-                              File{' '}
-                              {fileIndex +
-                                1}
-                            </strong>
-                          </div>
+                <button
+                  type="button"
+                  className="clear-filter-button"
+                  onClick={closeView}
+                >
+                  Close
+                </button>
+              </div>
 
-                          <div>
-                            <strong>
-                              Job ID:
-                            </strong>{' '}
-                            {
-                              job.orderId
-                            }
-                          </div>
+              {/* FILES */}
+              {viewRow.files.length === 0 ? (
+                <div className="empty-items">No completed files found.</div>
+              ) : viewDepartment === 'designer' ? (
+                /* ---------- DESIGNER: one table per day ---------- */
+                designerDayGroups.map(({ dateKey, files }) => (
+                <div key={dateKey} style={{ marginBottom: '24px' }}>
+                  <h3 style={{ margin: '0 0 4px' }}>{formatDate(dateKey)}</h3>
+                  <p style={{ margin: '0 0 10px' }}>
+                    {files.length} completed file(s)
+                  </p>
+                <div className="items-table-wrapper">
+                  <table className="items-table">
+                    <thead>
+                      <tr>
+                        <th>Job ID</th>
+                        <th>Customer</th>
+                        <th>Customer Adviser</th>
+                        <th>Bill No</th>
+                        <th>Item</th>
+                        <th>Size</th>
+                        <th>Qty</th>
+                        <th>Design Charge</th>
+                      </tr>
+                    </thead>
 
-                          <div>
-                            <strong>
-                              Customer:
-                            </strong>{' '}
-                            {
-                              job
-                                .customer
-                                .name ||
-                              '-'
-                            }
-                          </div>
+                    <tbody>
+                      {files.flatMap(({ job, completedItems }) => {
+                        const adviser =
+                          job.customerAdviser.name ||
+                          job.customerAdviser.username ||
+                          '-'
 
-                          <div>
-                            <strong>
-                              Company:
-                            </strong>{' '}
-                            {
-                              job
-                                .customer
-                                .companyName ||
-                              '-'
-                            }
-                          </div>
+                        // Bill No: no data yet, shows '-' until job.billNo is filled.
+                        const billNo = job.billNo || '-'
 
-                          <div>
-                            <strong>
-                              Entry Date:
-                            </strong>{' '}
-                            {formatDate(
-                              job.date,
+                        if (completedItems.length === 0) {
+                          return [
+                            <tr key={`${job.source}-${job.id}`}>
+                              <td>{job.orderId}</td>
+                              <td>{job.customer.name || '-'}</td>
+                              <td>{adviser}</td>
+                              <td>{billNo}</td>
+                              <td colSpan={3}>No non-NA items in this file.</td>
+                              <td>
+                                ₹{Number(job.designCharge || 0).toFixed(2)}
+                              </td>
+                            </tr>,
+                          ]
+                        }
+
+                        return completedItems.map((item, itemIndex) => (
+                          <tr key={`${job.source}-${job.id}-${itemIndex}`}>
+                            {itemIndex === 0 && (
+                              <>
+                                <td rowSpan={completedItems.length}>
+                                  {job.orderId}
+                                </td>
+                                <td rowSpan={completedItems.length}>
+                                  {job.customer.name || '-'}
+                                </td>
+                                <td rowSpan={completedItems.length}>
+                                  {adviser}
+                                </td>
+                                <td rowSpan={completedItems.length}>
+                                  {billNo}
+                                </td>
+                              </>
                             )}
-                          </div>
 
-                          {viewDepartment ===
-                            'designer' && (
-                            <>
-                              <div>
-                                <strong>
-                                  Design Finished:
-                                </strong>{' '}
-                                {job.designFinishedAt
-                                  ? job.designFinishedAt
-                                      .toDate()
-                                      .toLocaleString(
-                                        'en-IN',
-                                        {
-                                          day: '2-digit',
-                                          month: 'short',
-                                          year: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                          second: '2-digit',
-                                        },
-                                      )
-                                  : '-'}
-                              </div>
+                            <td>{item.name || '-'}</td>
 
-                              <div>
-                                <strong>
-                                  Finished By:
-                                </strong>{' '}
-                                {getDisplayName(
-                                  job
-                                    .designFinishedBy
-                                    ?.name,
-                                  job
-                                    .designFinishedBy
-                                    ?.username,
-                                )}
-                              </div>
-                            </>
-                          )}
+                            <td>
+                              {item.width || '-'} × {item.height || '-'}
+                            </td>
 
-                          {viewDepartment === 'printer' && (
-                            <div>
-                              <strong>Print Finished:</strong>{' '}
-                              {job.officeInfo.printCompletedAt
-                                ? job.officeInfo.printCompletedAt.toDate().toLocaleString('en-IN', {
-                                    day: '2-digit', month: 'short', year: 'numeric',
-                                    hour: '2-digit', minute: '2-digit',
-                                  })
-                                : '-'}
-                            </div>
-                          )}
+                            <td>{item.qty || '-'}</td>
 
-                          {viewDepartment === 'cutting' && (
-                            <div>
-                              <strong>Cutting Finished:</strong>{' '}
-                              {job.officeInfo.cuttingCompletedAt
-                                ? job.officeInfo.cuttingCompletedAt.toDate().toLocaleString('en-IN', {
-                                    day: '2-digit', month: 'short', year: 'numeric',
-                                    hour: '2-digit', minute: '2-digit',
-                                  })
-                                : '-'}
-                            </div>
-                          )}
+                            {itemIndex === 0 && (
+                              <td rowSpan={completedItems.length}>
+                                ₹{Number(job.designCharge || 0).toFixed(2)}
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      })}
+                    </tbody>
 
-                          {viewDepartment === 'production' && (
-                            <div>
-                              <strong>Production Completed:</strong>{' '}
-                              {job.officeInfo.productionCompletedAt
-                                ? job.officeInfo.productionCompletedAt.toDate().toLocaleString('en-IN', {
-                                    day: '2-digit', month: 'short', year: 'numeric',
-                                    hour: '2-digit', minute: '2-digit',
-                                  })
-                                : '-'}
-                            </div>
-                          )}
+                    <tfoot>
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'right' }}>
+                          <strong>Total Design Charge</strong>
+                        </td>
+                        <td>
+                          <strong>
+                            ₹
+                            {files
+                              .reduce(
+                                (sum, { job }) => sum + (job.designCharge || 0),
+                                0,
+                              )
+                              .toFixed(2)}
+                          </strong>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                </div>
+                ))
+              ) : (
+                /* ---------- OTHER DEPARTMENTS: card per file (unchanged) ---------- */
+                viewRow.files.map(({ job, completedItems }, fileIndex) => (
+                  <div
+                    key={`${job.source}-${job.id}`}
+                    style={{
+                      border: '1px solid #ddd',
+                      borderRadius: '10px',
+                      padding: '16px',
+                      marginBottom: '14px',
+                    }}
+                  >
+                    {/* FILE INFO */}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns:
+                          'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap: '10px',
+                        marginBottom: '14px',
+                      }}
+                    >
+                      <div>
+                        <strong>File {fileIndex + 1}</strong>
+                      </div>
 
-                          <div>
-                            <strong>
-                              Branch:
-                            </strong>{' '}
-                            {job.branch ||
-                              '-'}
-                          </div>
+                      <div>
+                        <strong>Job ID:</strong> {job.orderId}
+                      </div>
+
+                      <div>
+                        <strong>Customer:</strong> {job.customer.name || '-'}
+                      </div>
+
+                      <div>
+                        <strong>Company:</strong>{' '}
+                        {job.customer.companyName || '-'}
+                      </div>
+
+                      <div>
+                        <strong>Entry Date:</strong> {formatDate(job.date)}
+                      </div>
+
+                      {viewDepartment === 'printer' && (
+                        <div>
+                          <strong>Print Finished:</strong>{' '}
+                          {job.officeInfo.printCompletedAt
+                            ? job.officeInfo.printCompletedAt
+                                .toDate()
+                                .toLocaleString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                            : '-'}
                         </div>
+                      )}
 
-                        {/* DEPARTMENT-SPECIFIC TABLE */}
-                        <div className="items-table-wrapper">
-                          <table className="items-table">
+                      {viewDepartment === 'cutting' && (
+                        <div>
+                          <strong>Cutting Finished:</strong>{' '}
+                          {job.officeInfo.cuttingCompletedAt
+                            ? job.officeInfo.cuttingCompletedAt
+                                .toDate()
+                                .toLocaleString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                            : '-'}
+                        </div>
+                      )}
 
-                            <thead>
-                              <tr>
-                                <th>
-                                  Job ID
-                                </th>
+                      {viewDepartment === 'production' && (
+                        <div>
+                          <strong>Production Completed:</strong>{' '}
+                          {job.officeInfo.productionCompletedAt
+                            ? job.officeInfo.productionCompletedAt
+                                .toDate()
+                                .toLocaleString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                            : '-'}
+                        </div>
+                      )}
 
-                                <th>
-                                  Customer
-                                </th>
+                      <div>
+                        <strong>Branch:</strong> {job.branch || '-'}
+                      </div>
+                    </div>
 
-                                <th>
-                                  Item
-                                </th>
+                    {/* DEPARTMENT-SPECIFIC TABLE */}
+                    <div className="items-table-wrapper">
+                      <table className="items-table">
+                        <thead>
+                          <tr>
+                            <th>Job ID</th>
+                            <th>Customer</th>
+                            <th>Item</th>
+                            <th>Size</th>
+                            <th>Qty</th>
 
-                                <th>
-                                  Size
-                                </th>
+                            {(viewDepartment === 'printer' ||
+                              viewDepartment === 'cutting') && (
+                              <th>Total Square Feet</th>
+                            )}
 
-                                <th>
-                                  Qty
-                                </th>
+                            {viewDepartment === 'production' && (
+                              <th>Remarks</th>
+                            )}
+                          </tr>
+                        </thead>
 
-                                {viewDepartment ===
-                                  'designer' && (
-                                  <th>
-                                    Design Charge
-                                  </th>
+                        <tbody>
+                          {completedItems.length === 0 ? (
+                            <tr>
+                              <td colSpan={6}>No non-NA items in this file.</td>
+                            </tr>
+                          ) : (
+                            completedItems.map((item, itemIndex) => (
+                              <tr key={`${job.id}-${itemIndex}`}>
+                                {/* JOB ID */}
+                                {itemIndex === 0 && (
+                                  <td rowSpan={completedItems.length}>
+                                    {job.orderId}
+                                  </td>
                                 )}
 
-                                {(viewDepartment ===
-                                  'printer' ||
-                                  viewDepartment ===
-                                    'cutting') && (
-                                  <th>
-                                    Total Square Feet
-                                  </th>
+                                {/* CUSTOMER */}
+                                {itemIndex === 0 && (
+                                  <td rowSpan={completedItems.length}>
+                                    {job.customer.name}
+                                  </td>
                                 )}
 
-                                {viewDepartment ===
-                                  'production' && (
-                                  <th>
-                                    Remarks
-                                  </th>
+                                {/* ITEM */}
+                                <td>{item.name || '-'}</td>
+
+                                {/* SIZE */}
+                                <td>
+                                  {item.width || '-'} × {item.height || '-'}
+                                </td>
+
+                                {/* QTY */}
+                                <td>{item.qty || '-'}</td>
+
+                                {/* PRINTER */}
+                                {viewDepartment === 'printer' &&
+                                  itemIndex === 0 && (
+                                    <td rowSpan={completedItems.length}>
+                                      {getSquareFeet(job.items).toFixed(2)} sq
+                                      ft
+                                    </td>
+                                  )}
+
+                                {/* CUTTING */}
+                                {viewDepartment === 'cutting' &&
+                                  itemIndex === 0 && (
+                                    <td rowSpan={completedItems.length}>
+                                      {getSquareFeet(job.items).toFixed(2)} sq
+                                      ft
+                                    </td>
+                                  )}
+
+                                {/* PRODUCTION */}
+                                {viewDepartment === 'production' && (
+                                  <td>{item.remarks || '-'}</td>
                                 )}
                               </tr>
-                            </thead>
-
-                            <tbody>
-                              {completedItems.length ===
-                              0 ? (
-                                <tr>
-                                  <td
-                                    colSpan={
-                                      6
-                                    }
-                                  >
-                                    No non-NA
-                                    items in
-                                    this file.
-                                  </td>
-                                </tr>
-                              ) : (
-                                completedItems.map(
-                                  (
-                                    item,
-                                    itemIndex,
-                                  ) => (
-                                    <tr
-                                      key={`${job.id}-${itemIndex}`}
-                                    >
-                                      {/* JOB ID */}
-                                      {itemIndex ===
-                                        0 && (
-                                        <td
-                                          rowSpan={
-                                            completedItems.length
-                                          }
-                                        >
-                                          {
-                                            job.orderId
-                                          }
-                                        </td>
-                                      )}
-
-                                      {/* CUSTOMER */}
-                                      {itemIndex ===
-                                        0 && (
-                                        <td
-                                          rowSpan={
-                                            completedItems.length
-                                          }
-                                        >
-                                          {
-                                            job
-                                              .customer
-                                              .name
-                                          }
-                                        </td>
-                                      )}
-
-                                      {/* ITEM */}
-                                      <td>
-                                        {item.name ||
-                                          '-'}
-                                      </td>
-
-                                      {/* SIZE */}
-                                      <td>
-                                        {item.width ||
-                                          '-'}{' '}
-                                        ×{' '}
-                                        {item.height ||
-                                          '-'}
-                                      </td>
-
-                                      {/* QTY */}
-                                      <td>
-                                        {item.qty ||
-                                          '-'}
-                                      </td>
-
-                                      {/* DESIGNER */}
-                                      {viewDepartment ===
-                                        'designer' &&
-                                        itemIndex ===
-                                          0 && (
-                                          <td
-                                            rowSpan={
-                                              completedItems.length
-                                            }
-                                          >
-                                            ₹
-                                            {Number(
-                                              job.designCharge ||
-                                                0,
-                                            ).toFixed(
-                                              2,
-                                            )}
-                                          </td>
-                                        )}
-
-                                      {/* PRINTER */}
-                                      {viewDepartment ===
-                                        'printer' &&
-                                        itemIndex ===
-                                          0 && (
-                                          <td
-                                            rowSpan={
-                                              completedItems.length
-                                            }
-                                          >
-                                            {getSquareFeet(
-                                              job.items,
-                                            ).toFixed(
-                                              2,
-                                            )}{' '}
-                                            sq ft
-                                          </td>
-                                        )}
-
-                                      {/* CUTTING */}
-                                      {viewDepartment ===
-                                        'cutting' &&
-                                        itemIndex ===
-                                          0 && (
-                                          <td
-                                            rowSpan={
-                                              completedItems.length
-                                            }
-                                          >
-                                            {getSquareFeet(
-                                              job.items,
-                                            ).toFixed(
-                                              2,
-                                            )}{' '}
-                                            sq ft
-                                          </td>
-                                        )}
-
-                                      {/* PRODUCTION */}
-                                      {viewDepartment ===
-                                        'production' && (
-                                        <td>
-                                          {item.remarks ||
-                                            '-'}
-                                        </td>
-                                      )}
-                                    </tr>
-                                  ),
-                                )
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ),
-                  )
-                )}
-              </div>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          )}
+          </div>
+        )}
 
         {/* DATA SOURCE */}
         <section className="department-section">
           <div className="section-heading-row">
             <div>
-              <h2>
-                Data Source
-              </h2>
+              <h2>Data Source</h2>
 
               <p>
-                This dashboard uses the
-                same field structure as the
-                Sales page and listens to
-                Firestore in real time. Use
-                View on any staff row to see
-                that person's completed files.
+                This dashboard uses the same field structure as the Sales page
+                and listens to Firestore in real time. Use View on any staff
+                row to see that person's completed files.
               </p>
             </div>
           </div>
@@ -2255,32 +1499,15 @@ function SalesManager({
           <div className="statistics-filter-bar">
             <span>
               Job Orders:{' '}
-              {
-                jobs.filter(
-                  (job) =>
-                    job.source ===
-                    'job_order',
-                ).length
-              }
+              {jobs.filter((job) => job.source === 'job_order').length}
             </span>
 
             <span>
               Measurements:{' '}
-              {
-                jobs.filter(
-                  (job) =>
-                    job.source ===
-                    'measurement',
-                ).length
-              }
+              {jobs.filter((job) => job.source === 'measurement').length}
             </span>
 
-            <span>
-              In selected range:{' '}
-              {
-                jobsInRange.length
-              }
-            </span>
+            <span>In selected range: {jobsInRange.length}</span>
           </div>
         </section>
       </div>
