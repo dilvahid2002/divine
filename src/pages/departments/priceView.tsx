@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, ChangeEvent } from 'react'
-
+import { useNavigate } from 'react-router-dom'
 import {
   collection,
   doc,
@@ -50,7 +50,7 @@ const BATCH_SIZE = 450
 
 
 function PriceView() {
-
+const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [items, setItems] = useState<PriceItem[]>([])
@@ -466,7 +466,17 @@ function PriceView() {
             </button>
 
           </div>
-
+          <button
+              type="button"
+              className="add-item-button"
+              onClick={() =>
+                navigate(
+                  '/departments/StockView',
+                )
+              }
+            >
+              Stock Report
+            </button>
         </div>
 
 

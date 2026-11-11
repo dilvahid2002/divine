@@ -37,7 +37,7 @@ import MeasurementSchedule from './pages/departments/MeasurementSchedule'
 
 // PRICE VIEW
 import PriceView from './pages/departments/priceView'
-
+import StockView from './pages/departments/StockView'
 import './App.css'
 
 
@@ -325,6 +325,13 @@ function App() {
             <PriceView />
           }
         />
+        <Route
+          path="/departments/StockView"
+          element={
+            <StockView />
+          }
+        />
+
 
 
         {/* =========================================
