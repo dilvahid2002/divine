@@ -1,15 +1,18 @@
-  import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
   import {
   useLocation,
   useNavigate,
+  useParams,
 } from 'react-router-dom'
   import {
     collection,
     doc,
+    getDoc,
     getDocs,
     query,
     runTransaction,
     serverTimestamp,
+    updateDoc,
     where,
   } from 'firebase/firestore'
   import { db } from '../../firebase'
@@ -21,6 +24,7 @@
   phoneNumber?: string
   place?: string
   branch?: Branch
+  jobOrderId?: string
 }
 
 interface JobOrderProps {
@@ -70,6 +74,32 @@ interface JobOrderProps {
     const location = useLocation()
     const locationState =
       (location.state ?? {}) as JobOrderLocationState
+
+    /* =========================================
+      EDIT MODE
+
+      Edit mode is on when the route has an :id
+      param (e.g. /departments/sales/job-orders/:id/edit)
+      or when navigate() passes { jobOrderId } in state.
+    ========================================== */
+
+    const { id: routeId } = useParams()
+
+    const editId = routeId ?? locationState.jobOrderId
+
+    const isEditMode = Boolean(editId)
+
+    const [loadingOrder, setLoadingOrder] =
+      useState(false)
+
+    const [orderIdLabel, setOrderIdLabel] =
+      useState('')
+
+    const [originalOrder, setOriginalOrder] =
+      useState<{
+        statuses: Record<string, string>
+        officeInfo: Record<string, unknown>
+      }>({ statuses: {}, officeInfo: {} })
 
     /* =========================================
       BRANCH
@@ -346,6 +376,108 @@ interface JobOrderProps {
 
 
     /* =========================================
+      LOAD JOB ORDER (EDIT MODE)
+    ========================================== */
+
+    useEffect(() => {
+      if (!editId) {
+        return
+      }
+
+      let cancelled = false
+
+      const loadJobOrder = async () => {
+        setLoadingOrder(true)
+        setMessage('')
+
+        try {
+          const snapshot = await getDoc(
+            doc(db, 'job_orders', editId),
+          )
+
+          if (cancelled) {
+            return
+          }
+
+          if (!snapshot.exists()) {
+            setMessage('Job order not found.')
+            setMessageType('error')
+            return
+          }
+
+          const data = snapshot.data()
+          const office = data.officeInfo ?? {}
+
+          setBranch(data.branch ?? '')
+          setDate(data.date ?? '')
+          setExpectedDeliveryDate(
+            data.expectedDeliveryDate ?? '',
+          )
+
+          setCustomerName(data.customer?.name ?? '')
+          setCompanyName(data.customer?.companyName ?? '')
+          setPhoneNumber(data.customer?.phoneNumber ?? '')
+          setWhatsappNumber(
+            data.customer?.whatsappNumber ?? '',
+          )
+          setPlace(data.customer?.place ?? '')
+
+          setItems(
+            Array.isArray(data.items)
+              ? data.items.map(
+                  (
+                    item: Partial<Item>,
+                    index: number,
+                  ) => ({
+                    slNo: index + 1,
+                    name: String(item.name ?? ''),
+                    width: String(item.width ?? ''),
+                    height: String(item.height ?? ''),
+                    qty: String(item.qty ?? ''),
+                    price: String(item.price ?? ''),
+                    remarks: String(item.remarks ?? ''),
+                  }),
+                )
+              : [],
+          )
+
+          setDesignJob(Boolean(office.designJob))
+          setPrintJob(Boolean(office.printJob))
+          setProductionJob(Boolean(office.productionJob))
+          setCuttingJob(Boolean(office.cuttingJob))
+          setSelectedDesigner(office.designer ?? '')
+          setPrintBranch(office.printBranch ?? '')
+
+          setOrderIdLabel(data.orderId ?? '')
+
+          setOriginalOrder({
+            statuses: data.statuses ?? {},
+            officeInfo: office,
+          })
+        } catch (error) {
+          console.error(
+            'Error loading job order:',
+            error,
+          )
+
+          setMessage('Unable to load the job order.')
+          setMessageType('error')
+        } finally {
+          if (!cancelled) {
+            setLoadingOrder(false)
+          }
+        }
+      }
+
+      loadJobOrder()
+
+      return () => {
+        cancelled = true
+      }
+    }, [editId])
+
+
+    /* =========================================
       ADD ITEM
     ========================================== */
 
@@ -579,6 +711,117 @@ interface JobOrderProps {
       /* -----------------------------------------
         START SAVING
       ------------------------------------------ */
+
+      /* -----------------------------------------
+        EDIT MODE: update the existing job order
+        (order ID, branch, delivery state, adviser
+        and created date are left untouched)
+      ------------------------------------------ */
+
+      if (isEditMode && editId) {
+        setSaving(true)
+
+        /*
+        * A department keeps its current status if its
+        * job stays selected. Newly selected jobs start
+        * as Pending; deselected jobs become Finished.
+        */
+        const nextStatus = (
+          enabled: boolean,
+          wasEnabled: unknown,
+          statusKey: string,
+        ) => {
+          if (!enabled) {
+            return 'Finished'
+          }
+
+          return wasEnabled
+            ? originalOrder.statuses[statusKey] ?? 'Pending'
+            : 'Pending'
+        }
+
+        try {
+          await updateDoc(
+            doc(db, 'job_orders', editId),
+            {
+              date,
+              expectedDeliveryDate,
+
+              'customer.name': customerName.trim(),
+              'customer.companyName': companyName.trim(),
+              'customer.phoneNumber': phoneNumber.trim(),
+              'customer.whatsappNumber':
+                whatsappNumber.trim(),
+              'customer.place': place.trim(),
+
+              items,
+
+              'officeInfo.designJob': designJob,
+              'officeInfo.designer':
+                designJob ? selectedDesigner : null,
+              'officeInfo.printJob': printJob,
+              'officeInfo.printBranch':
+                printJob ? printBranch : null,
+              'officeInfo.productionJob': productionJob,
+              'officeInfo.cuttingJob': cuttingJob,
+
+              'statuses.design': nextStatus(
+                designJob,
+                originalOrder.officeInfo.designJob,
+                'design',
+              ),
+              'statuses.print': nextStatus(
+                printJob,
+                originalOrder.officeInfo.printJob,
+                'print',
+              ),
+              'statuses.production': nextStatus(
+                productionJob,
+                originalOrder.officeInfo.productionJob,
+                'production',
+              ),
+              'statuses.cutting': nextStatus(
+                cuttingJob,
+                originalOrder.officeInfo.cuttingJob,
+                'cutting',
+              ),
+
+              updatedAt: serverTimestamp(),
+
+              updatedBy: {
+                name: user.name,
+                username: user.username,
+              },
+            },
+          )
+
+          setMessage(
+            `Job Order ${orderIdLabel} updated successfully.`,
+          )
+
+          setMessageType('success')
+
+          setTimeout(() => {
+            navigate('/departments/sales')
+          }, 700)
+        } catch (error) {
+          console.error(
+            'Error updating job order:',
+            error,
+          )
+
+          setMessage(
+            'Unable to update the job order. Please try again.',
+          )
+
+          setMessageType('error')
+        } finally {
+          setSaving(false)
+        }
+
+        return
+      }
+
 
       setSaving(true)
 
@@ -862,11 +1105,19 @@ interface JobOrderProps {
             <div>
 
               <h1>
-                Create Job Order
+                {isEditMode
+                  ? `Edit Job Order${
+                      orderIdLabel
+                        ? ` ${orderIdLabel}`
+                        : ''
+                    }`
+                  : 'Create Job Order'}
               </h1>
 
               <p>
-                Create a new customer job order
+                {isEditMode
+                  ? 'Update this customer job order'
+                  : 'Create a new customer job order'}
               </p>
 
             </div>
@@ -897,7 +1148,18 @@ interface JobOrderProps {
               BRANCH SELECTION
           ====================================== */}
 
-          {!branch && (
+          {isEditMode && !branch && (loadingOrder || message) && (
+
+            <div className="form-message">
+              {loadingOrder
+                ? 'Loading job order...'
+                : message}
+            </div>
+
+          )}
+
+
+          {!branch && !isEditMode && (
 
             <section className="department-content">
 
@@ -1068,22 +1330,25 @@ interface JobOrderProps {
                           '#64748b',
                       }}
                     >
-                      Job order will be created
-                      under this branch.
+                      {isEditMode
+                        ? 'Branch cannot be changed on an existing job order.'
+                        : 'Job order will be created under this branch.'}
                     </p>
 
                   </div>
 
 
-                  <button
-                    type="button"
-                    className="department-back-button"
-                    onClick={() =>
-                      setBranch('')
-                    }
-                  >
-                    Change Branch
-                  </button>
+                  {!isEditMode && (
+                    <button
+                      type="button"
+                      className="department-back-button"
+                      onClick={() =>
+                        setBranch('')
+                      }
+                    >
+                      Change Branch
+                    </button>
+                  )}
 
                 </div>
 
@@ -1976,8 +2241,12 @@ interface JobOrderProps {
                   disabled={saving}
                 >
                   {saving
-                    ? 'Creating Job Order...'
-                    : 'Create Job Order'}
+                    ? isEditMode
+                      ? 'Saving Changes...'
+                      : 'Creating Job Order...'
+                    : isEditMode
+                      ? 'Save Changes'
+                      : 'Create Job Order'}
                 </button>
 
               </div>
@@ -1992,4 +2261,4 @@ interface JobOrderProps {
     )
   }
 
-  export default JobOrder
+  export default JobOrder 

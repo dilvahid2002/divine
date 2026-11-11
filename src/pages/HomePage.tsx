@@ -87,6 +87,7 @@ const availableRoles = [
   'Accountant',
   'MD',
   'HR',
+   'Price and Stock',
 ]
 
 const departmentPaths: Record<
@@ -107,6 +108,8 @@ const departmentPaths: Record<
   HR: '/departments/hr',
   'Live Production':
     '/departments/live-production',
+    'Price and Stock': '/departments/priceView',
+    
 }
 
 /*

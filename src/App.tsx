@@ -35,6 +35,9 @@ import LeadsView from './pages/departments/LeadsView'
 import Leads from './pages/departments/Leads'
 import MeasurementSchedule from './pages/departments/MeasurementSchedule'
 
+// PRICE VIEW
+import PriceView from './pages/departments/priceView'
+
 import './App.css'
 
 
@@ -313,6 +316,18 @@ function App() {
 
 
         {/* =========================================
+            PRICE VIEW
+        ========================================== */}
+
+        <Route
+          path="/departments/priceView"
+          element={
+            <PriceView />
+          }
+        />
+
+
+        {/* =========================================
             CUTTING
         ========================================== */}
 
@@ -525,4 +540,3 @@ function App() {
 
 
 export default App
-

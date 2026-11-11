@@ -1563,7 +1563,7 @@ function Sales({ user }: SalesProps) {
               Manage customer job orders
             </p>
           </div>
-
+            
             <button
               type="button"
               className="add-item-button"

@@ -30,6 +30,8 @@ const availableRoles = [
   'Accountant',
   'MD',
   'HR',
+  'Price and Stock',
+  'Price Manager',
 ]
 
 function UserManager() {
