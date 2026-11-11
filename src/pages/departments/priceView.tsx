@@ -1,5 +1,7 @@
+
 import { useEffect, useRef, useState, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+
 import {
   collection,
   doc,
@@ -30,7 +32,6 @@ interface PriceItem {
 
 type CSVRow = Record<string, string>
 
-
 const CSV_HEADERS = [
   'slno',
   'itemcode',
@@ -45,12 +46,13 @@ const CSV_HEADERS = [
   'Active',
 ]
 
-
 const BATCH_SIZE = 450
 
 
 function PriceView() {
-const navigate = useNavigate()
+
+  const navigate = useNavigate()
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [items, setItems] = useState<PriceItem[]>([])
@@ -263,8 +265,6 @@ const navigate = useNavigate()
     setMessage('')
 
 
-    // Check CSV extension
-
     if (!file.name.toLowerCase().endsWith('.csv')) {
 
       setMessage('Only CSV files are allowed.')
@@ -345,21 +345,14 @@ const navigate = useNavigate()
       }
 
 
-      // =====================================
-      // REPLACE OLD DATA
-      // =====================================
-
-      // Delete all existing documents
+      // Replace old data
 
       await deleteExistingData()
-
-
-      // Save new documents
 
       await saveNewData(newItems)
 
 
-      // Update UI
+      // Refresh UI
 
       await fetchPriceList()
 
@@ -383,7 +376,6 @@ const navigate = useNavigate()
 
       setMessageType('error')
 
-      // Refresh in case some batches were already committed
       await fetchPriceList()
 
     } finally {
@@ -398,22 +390,42 @@ const navigate = useNavigate()
 
 
   // =========================================
-  // SEARCH FILTER
+  // SEARCH FILTER + SORT BY SL NO
   // =========================================
 
-  const filteredItems = items.filter(item => {
+  const filteredItems = items
+    .filter(item => {
 
-    const searchValue = search.toLowerCase().trim()
+      const searchValue = search.toLowerCase().trim()
 
-    if (!searchValue) return true
+      if (!searchValue) return true
 
-    return Object.values(item).some(value =>
+      return Object.values(item).some(value =>
+        value.toLowerCase().includes(searchValue),
+      )
 
-      value.toLowerCase().includes(searchValue),
+    })
+    .sort((a, b) => {
 
-    )
+      const slA = a.slno.trim()
+      const slB = b.slno.trim()
 
-  })
+      // Empty Sl No goes to bottom
+
+      if (!slA && !slB) return 0
+
+      if (!slA) return 1
+
+      if (!slB) return -1
+
+      // Numeric-aware ascending sorting
+
+      return slA.localeCompare(slB, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      })
+
+    })
 
 
   // =========================================
@@ -466,17 +478,20 @@ const navigate = useNavigate()
             </button>
 
           </div>
+
+
+          {/* STOCK REPORT BUTTON */}
+
           <button
-              type="button"
-              className="add-item-button"
-              onClick={() =>
-                navigate(
-                  '/departments/StockView',
-                )
-              }
-            >
-              Stock Report
-            </button>
+            type="button"
+            className="add-item-button"
+            onClick={() =>
+              navigate('/departments/StockView')
+            }
+          >
+            Stock Report
+          </button>
+
         </div>
 
 
@@ -575,7 +590,9 @@ const navigate = useNavigate()
 
                   filteredItems.map((item, index) => (
 
-                    <tr key={`${item.slno}-${item.batchCode}-${index}`}>
+                    <tr
+                      key={`${item.slno}-${item.batchCode}-${index}`}
+                    >
 
                       <td>{item.slno}</td>
 

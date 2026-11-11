@@ -311,10 +311,36 @@ function StockView() {
       }
     })
 
-    return Array.from(stockMap.values()).map(item => ({
-      ...item,
-      totalStock: item.kalpettaStock + item.batheryStock,
-    }))
+    return Array.from(stockMap.values())
+      .map(item => ({
+        ...item,
+        totalStock: item.kalpettaStock + item.batheryStock,
+      }))
+      .sort((a, b) => {
+        // Numeric-aware ascending Sl No sort; blank values go to the end.
+        const slNoA = a.slno.trim()
+        const slNoB = b.slno.trim()
+
+        if (!slNoA && !slNoB) {
+          return a.itemCode.localeCompare(b.itemCode, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          })
+        }
+        if (!slNoA) return 1
+        if (!slNoB) return -1
+
+        return (
+          slNoA.localeCompare(slNoB, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          }) ||
+          a.itemCode.localeCompare(b.itemCode, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          })
+        )
+      })
   }, [kalpettaItems, batheryItems])
 
   const filteredItems = useMemo(() => {
