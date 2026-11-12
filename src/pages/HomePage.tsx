@@ -134,6 +134,136 @@ const getTodayDate = () => {
 
 /*
  * =========================================================
+ * PENDING WORK COUNTERS (Designer / Cutting / Printer)
+ *
+ * These mirror the "Pending" count logic of each
+ * department page so the home badge matches what the
+ * user sees after opening the department.
+ * =========================================================
+ */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type OrderData = Record<string, any>
+
+type OrderSource = 'job_order' | 'measurement'
+
+interface PendingUser {
+  name: string
+  username: string
+}
+
+const allItemsDone = (
+  items: unknown,
+  field: string,
+  doneValues: string[],
+): boolean => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return false
+  }
+
+  return items.every((item) =>
+    doneValues.includes(item?.[field]),
+  )
+}
+
+/* DESIGNER: only MY assigned work (same as the Designer page default) */
+const isDesignerPending = (
+  data: OrderData,
+  source: OrderSource,
+  me: PendingUser,
+): boolean => {
+  const office = data.officeInfo ?? {}
+
+  if (office.designJob !== true) return false
+
+  const designStatus = data.statuses?.design
+
+  if (designStatus === 'Finished') return false
+
+  if (source === 'measurement') {
+    // Measurement design work starts after quotation confirmation
+    if (data.quotation?.status !== 'Confirmed') return false
+
+    // The Designer page does not count these as pending
+    if (designStatus === 'In Progress') return false
+  }
+
+  const assignedToMe = office.designerUsername
+    ? office.designerUsername === me.username
+    : !!office.designer && office.designer === me.name
+
+  if (!assignedToMe) return false
+
+  return !allItemsDone(data.items, 'designStatus', [
+    'finished',
+    'na',
+  ])
+}
+
+/* CUTTING: only MY assigned work (same as the Cutting page default) */
+const isCuttingPending = (
+  data: OrderData,
+  source: OrderSource,
+  me: PendingUser,
+): boolean => {
+  const office = data.officeInfo ?? {}
+
+  if (office.cuttingJob !== true) return false
+
+  if (
+    source === 'measurement' &&
+    data.quotation?.status !== 'Confirmed'
+  ) {
+    return false
+  }
+
+  // Design must be finished before cutting can start
+  if (
+    office.designJob === true &&
+    data.statuses?.design !== 'Finished'
+  ) {
+    return false
+  }
+
+  if (data.statuses?.cutting === 'Finished') return false
+
+  const assignedToMe =
+    office.cuttingUsername && me.username
+      ? office.cuttingUsername === me.username
+      : Boolean(office.cutting) && office.cutting === me.name
+
+  if (!assignedToMe) return false
+
+  return !allItemsDone(data.items, 'cuttingStatus', [
+    'finished',
+    'na',
+  ])
+}
+
+/* PRINTER: all print work (the Printer page is not per-user) */
+const isPrinterPending = (data: OrderData): boolean => {
+  const office = data.officeInfo ?? {}
+
+  if (office.printJob !== true) return false
+
+  // Design must be finished before printing can start
+  if (
+    office.designJob === true &&
+    data.statuses?.design !== 'Finished'
+  ) {
+    return false
+  }
+
+  if (data.statuses?.print === 'Finished') return false
+
+  return !allItemsDone(data.items, 'printStatus', [
+    'printed',
+    'na',
+  ])
+}
+
+/*
+ * =========================================================
  * COMPONENT
  * =========================================================
  */
@@ -208,6 +338,13 @@ function HomePage({
     useState(0)
 
   /*
+   * Pending counts for Designer / Cutting / Printer
+   * e.g. { Designer: 3, Cutting: 1, Printer: 7 }
+   */
+  const [departmentPending, setDepartmentPending] =
+    useState<Record<string, number>>({})
+
+  /*
    * =========================================================
    * FIRESTORE DUTY DOCUMENT
    *
@@ -271,6 +408,121 @@ function HomePage({
 
     return unsubscribe
   }, [user.username])
+
+  /*
+   * =========================================================
+   * LIVE PENDING COUNTS: DESIGNER / CUTTING / PRINTER
+   *
+   * Listens to job_orders + measurements and counts the
+   * pending work for the departments this user has.
+   * Only subscribes if the user has at least one of
+   * these roles.
+   * =========================================================
+   */
+
+  const userRolesKey = (user?.roles ?? [])
+    .map((role) => role.trim().toLowerCase())
+    .sort()
+    .join('|')
+
+  useEffect(() => {
+    const roles = userRolesKey ? userRolesKey.split('|') : []
+
+    const wantsDesigner = roles.includes('designer')
+    const wantsCutting = roles.includes('cutting')
+    const wantsPrinter = roles.includes('printer')
+
+    if (!wantsDesigner && !wantsCutting && !wantsPrinter) {
+      setDepartmentPending({})
+      return
+    }
+
+    const me: PendingUser = {
+      name: user.name,
+      username: user.username,
+    }
+
+    let jobOrders: OrderData[] = []
+    let measurements: OrderData[] = []
+
+    const count = (
+      test: (data: OrderData, source: OrderSource) => boolean,
+    ) =>
+      jobOrders.filter((data) => test(data, 'job_order'))
+        .length +
+      measurements.filter((data) =>
+        test(data, 'measurement'),
+      ).length
+
+    const recalculate = () => {
+      const next: Record<string, number> = {}
+
+      if (wantsDesigner) {
+        next['Designer'] = count((data, source) =>
+          isDesignerPending(data, source, me),
+        )
+      }
+
+      if (wantsCutting) {
+        next['Cutting'] = count((data, source) =>
+          isCuttingPending(data, source, me),
+        )
+      }
+
+      if (wantsPrinter) {
+        next['Printer'] = count((data) =>
+          isPrinterPending(data),
+        )
+      }
+
+      setDepartmentPending(next)
+    }
+
+    const unsubscribeJobOrders = onSnapshot(
+      collection(db, 'job_orders'),
+
+      (snapshot) => {
+        jobOrders = snapshot.docs.map((document) =>
+          document.data(),
+        )
+        recalculate()
+      },
+
+      (error) => {
+        console.error(
+          'Unable to load job order counts:',
+          error,
+        )
+        jobOrders = []
+        recalculate()
+      },
+    )
+
+    const unsubscribeMeasurements = onSnapshot(
+      collection(db, 'measurements'),
+
+      (snapshot) => {
+        measurements = snapshot.docs.map((document) =>
+          document.data(),
+        )
+        recalculate()
+      },
+
+      (error) => {
+        console.error(
+          'Unable to load measurement counts:',
+          error,
+        )
+        measurements = []
+        recalculate()
+      },
+    )
+
+    return () => {
+      unsubscribeJobOrders()
+      unsubscribeMeasurements()
+    }
+  }, [userRolesKey, user.name, user.username])
 
   /*
    * =========================================================
@@ -2312,6 +2564,12 @@ function HomePage({
               Each card is wrapped in a div so the red pending
               badge stays fully visible even when the card
               itself is greyed out (duty not started).
+
+              Badges:
+              - To Do List  -> my pending tasks
+              - Designer    -> my pending design work
+              - Cutting     -> my pending cutting work
+              - Printer     -> all pending print work
               ================================================= */}
 
           {availableRoles
@@ -2326,9 +2584,13 @@ function HomePage({
                   role,
                 )
 
+              const pendingForRole =
+                role === 'To Do List'
+                  ? pendingTodoCount
+                  : departmentPending[role] ?? 0
+
               const showPendingBadge =
-                role === 'To Do List' &&
-                pendingTodoCount > 0
+                pendingForRole > 0
 
               return (
 
@@ -2372,17 +2634,17 @@ function HomePage({
 
                   </button>
 
-                  {/* RED PENDING TASK BADGE */}
+                  {/* RED PENDING BADGE */}
 
                   {showPendingBadge && (
 
                     <span
                       className="department-badge"
-                      title={`${pendingTodoCount} pending task(s)`}
+                      title={`${pendingForRole} pending`}
                     >
-                      {pendingTodoCount > 99
+                      {pendingForRole > 99
                         ? '99+'
-                        : pendingTodoCount}
+                        : pendingForRole}
                     </span>
 
                   )}
