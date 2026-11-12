@@ -201,7 +201,7 @@
 }
 
 .todo-field textarea {
-  min-height: 90px;
+  min-height: 1px;
   resize: vertical;
   line-height: 1.6;
 }
@@ -631,5 +631,141 @@
   .todo-page *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+.todo-task-input-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.todo-task-count {
+  margin-top: 10px;
+  color: #718096;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.todo-multiple-tasks {
+  min-width: 0;
+}
+/* Add Another Task Button */
+
+.todo-add-another {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 18px;
+  margin-top: 5px;
+  border: 1px dashed #3182ce;
+  border-radius: 9px;
+  background: #f0f7ff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.todo-add-another:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+}
+
+.todo-add-another:active {
+  transform: scale(0.97);
+}
+
+.todo-add-another:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.todo-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  background: #fff1f2;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.todo-delete-btn:hover {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+.todo-delete-btn:active {
+  transform: scale(0.96);
+}
+/* Delete Task Button */
+
+.todo-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 15px;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  background: #fff1f2;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.todo-delete-button:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.18);
+  transform: translateY(-1px);
+}
+
+.todo-delete-button:active {
+  transform: scale(0.96);
+}
+
+.todo-delete-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Task action layout */
+
+.todo-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .todo-delete-button {
+    padding: 7px 11px;
+    font-size: 11px;
+  }
+
+  .todo-action-buttons {
+    justify-content: flex-start;
   }
 }
