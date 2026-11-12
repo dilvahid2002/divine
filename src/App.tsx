@@ -38,6 +38,7 @@ import MeasurementSchedule from './pages/departments/MeasurementSchedule'
 // PRICE VIEW
 import PriceView from './pages/departments/priceView'
 import StockView from './pages/departments/StockView'
+import Todo from './pages/departments/todo'
 import './App.css'
 
 
@@ -97,453 +98,149 @@ function DepartmentRoute({
    APP
 ========================================= */
 
+
 function App() {
-
-  const [currentUser, setCurrentUser] =
-    useState<User | null>(null)
-
-
-  /* =========================================
-     LOGIN
-  ========================================== */
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
 
   const handleLogin = (user: User) => {
     setCurrentUser(user)
   }
 
-
-  /* =========================================
-     USER NOT LOGGED IN
-  ========================================== */
-
-  if (!currentUser) {
-    return (
-      <BrowserRouter>
-        <LoginPage
-          onLogin={handleLogin}
-        />
-      </BrowserRouter>
-    )
-  }
-
-
-  /* =========================================
-     APPLICATION ROUTES
-  ========================================== */
-
   return (
     <BrowserRouter>
+      {!currentUser ? (
+        <LoginPage onLogin={handleLogin} />
+      ) : (
+        <Routes>
+          <Route
+            path="/"
+            element={
+              currentUser.username === 'admin' &&
+              currentUser.password === 'admin' ? (
+                <UserManager />
+              ) : (
+                <HomePage user={currentUser} />
+              )
+            }
+          />
 
-      <Routes>
+          <Route
+            path="/departments/todo"
+            element={<Todo user={currentUser} />}
+          />
 
-        {/* =========================================
-            HOME
-        ========================================== */}
+          <Route path="/attendance" element={<Attendance />} />
 
-        <Route
-          path="/"
-          element={
-            currentUser.username === 'admin' &&
-            currentUser.password === 'admin' ? (
-              <UserManager />
-            ) : (
-              <HomePage
-                user={currentUser}
-              />
-            )
-          }
-        />
+          <Route
+            path="/my-attandance"
+            element={<MyAttendance user={currentUser} />}
+          />
 
+          <Route
+            path="/departments/job-order"
+            element={<JobOrder user={currentUser} />}
+          />
 
-        {/* =========================================
-            ATTENDANCE
-        ========================================== */}
+          <Route
+            path="/departments/sales"
+            element={
+              <DepartmentRoute user={currentUser} role="Sales">
+                <Sales user={currentUser} />
+              </DepartmentRoute>
+            }
+          />
 
-        <Route
-          path="/attendance"
-          element={
-            <Attendance />
-          }
-        />
+          <Route path="/departments/sales-statistics" element={<SalesStatistics user={currentUser} />} />
 
-
-        {/* =========================================
-            OLD ATTENDANCE URL
-        ========================================== */}
-
-        <Route
-          path="/attandance"
-          element={
-            <Navigate
-              to="/attendance"
-              replace
-            />
-          }
-        />
-
-
-        {/* =========================================
-            MY ATTENDANCE
-        ========================================== */}
-
-        <Route
-          path="/my-attandance"
-          element={
-            <MyAttendance
-              user={currentUser}
-            />
-          }
-        />
-
-
-        {/* =========================================
-            JOB ORDER
-        ========================================== */}
-
-        <Route
-          path="/departments/job-order"
-          element={
-            <JobOrder
-              user={currentUser}
-            />
-          }
-        />
-
-
-        {/* =========================================
-            SALES
-        ========================================== */}
-
-        <Route
-          path="/departments/sales"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Sales"
-            >
-              <Sales
-                user={currentUser}
-              />
+          <Route path="/departments/leads" element={
+            <DepartmentRoute user={currentUser} role="Sales">
+              <Leads user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            SALES STATISTICS
-        ========================================== */}
-
-        <Route
-          path="/departments/sales-statistics"
-          element={
-            <SalesStatistics
-              user={currentUser}
-            />
-          }
-        />
-
-
-        {/* =========================================
-            LEADS
-        ========================================== */}
-
-        <Route
-          path="/departments/leads"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Sales"
-            >
-              <Leads
-                user={currentUser}
-              />
+          <Route path="/departments/LeadsView" element={
+            <DepartmentRoute user={currentUser} role="Sales">
+              <LeadsView user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            LEADS VIEW
-        ========================================== */}
-
-        <Route
-          path="/departments/LeadsView"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Sales"
-            >
-              <LeadsView
-                user={currentUser}
-              />
+          <Route path="/departments/measurement-scheduler" element={
+            <DepartmentRoute user={currentUser} role="Sales">
+              <MeasurementSchedule user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
+          <Route
+            path="/departments/MeasurementSchedule"
+            element={<Navigate to="/departments/measurement-scheduler" replace />}
+          />
 
-        {/* =========================================
-            MEASUREMENT SCHEDULER
-        ========================================== */}
+          <Route path="/departments/priceView" element={<PriceView />} />
+          <Route path="/departments/StockView" element={<StockView />} />
 
-        <Route
-          path="/departments/measurement-scheduler"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Sales"
-            >
-              <MeasurementSchedule
-                user={currentUser}
-              />
+          <Route path="/departments/cutting" element={<Cutting user={currentUser} />} />
+          <Route path="/departments/measurement" element={<Measurement user={currentUser} />} />
+
+          <Route path="/departments/designer" element={
+            <DepartmentRoute user={currentUser} role="Designer">
+              <Designer user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            OLD MEASUREMENT SCHEDULE URL
-        ========================================== */}
-
-        <Route
-          path="/departments/MeasurementSchedule"
-          element={
-            <Navigate
-              to="/departments/measurement-scheduler"
-              replace
-            />
-          }
-        />
-
-
-        {/* =========================================
-            PRICE VIEW
-        ========================================== */}
-
-        <Route
-          path="/departments/priceView"
-          element={
-            <PriceView />
-          }
-        />
-        <Route
-          path="/departments/StockView"
-          element={
-            <StockView />
-          }
-        />
-
-
-
-        {/* =========================================
-            CUTTING
-        ========================================== */}
-
-        <Route
-          path="/departments/cutting"
-          element={
-            <Cutting
-              user={currentUser}
-            />
-          }
-        />
-
-
-        {/* =========================================
-            MEASUREMENT
-        ========================================== */}
-
-        <Route
-          path="/departments/measurement"
-          element={
-            <Measurement
-              user={currentUser}
-            />
-          }
-        />
-
-
-        {/* =========================================
-            DESIGNER
-        ========================================== */}
-
-        <Route
-          path="/departments/designer"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Designer"
-            >
-              <Designer
-                user={currentUser}
-              />
+          <Route path="/departments/printer" element={
+            <DepartmentRoute user={currentUser} role="Printer">
+              <Printer user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            PRINTER
-        ========================================== */}
-
-        <Route
-          path="/departments/printer"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Printer"
-            >
-              <Printer
-                user={currentUser}
-              />
+          <Route path="/departments/production" element={
+            <DepartmentRoute user={currentUser} role="Production">
+              <Production user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            PRODUCTION
-        ========================================== */}
-
-        <Route
-          path="/departments/production"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Production"
-            >
-              <Production
-                user={currentUser}
-              />
-            </DepartmentRoute>
-          }
-        />
-
-
-        {/* =========================================
-            PRODUCTION MANAGER
-        ========================================== */}
-
-        <Route
-          path="/departments/production-manager"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Production Manager"
-            >
+          <Route path="/departments/production-manager" element={
+            <DepartmentRoute user={currentUser} role="Production Manager">
               <ProductionManager />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            SALES MANAGER
-        ========================================== */}
-
-        <Route
-          path="/departments/sales-manager"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Sales Manager"
-            >
+          <Route path="/departments/sales-manager" element={
+            <DepartmentRoute user={currentUser} role="Sales Manager">
               <SalesManager user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            ACCOUNTANT
-        ========================================== */}
-
-        <Route
-          path="/departments/accountant"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Accountant"
-            >
-              <Accountant
-                user={currentUser}
-              />
+          <Route path="/departments/accountant" element={
+            <DepartmentRoute user={currentUser} role="Accountant">
+              <Accountant user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            MD
-        ========================================== */}
-
-        <Route
-          path="/departments/md"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="MD"
-            >
+          <Route path="/departments/md" element={
+            <DepartmentRoute user={currentUser} role="MD">
               <MD />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            HR
-        ========================================== */}
-
-        <Route
-          path="/departments/hr"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="HR"
-            >
+          <Route path="/departments/hr" element={
+            <DepartmentRoute user={currentUser} role="HR">
               <HR />
             </DepartmentRoute>
-          }
-        />
+          } />
 
-
-        {/* =========================================
-            LIVE PRODUCTION
-        ========================================== */}
-
-        <Route
-          path="/departments/live-production"
-          element={
-            <DepartmentRoute
-              user={currentUser}
-              role="Live Production"
-            >
-              <LiveProduction
-                user={currentUser}
-              />
+          <Route path="/departments/live-production" element={
+            <DepartmentRoute user={currentUser} role="Live Production">
+              <LiveProduction user={currentUser} />
             </DepartmentRoute>
-          }
-        />
+          } />
 
+          <Route path="/attandance" element={<Navigate to="/attendance" replace />} />
 
-        {/* =========================================
-            UNKNOWN URL
-        ========================================== */}
-
-        <Route
-          path="*"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
-        />
-
-      </Routes>
-
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      )}
     </BrowserRouter>
   )
 }
-
-
 export default App

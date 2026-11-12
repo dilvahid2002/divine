@@ -79,6 +79,7 @@ const dutyBranches = [
 const availableRoles = [
   'Sales',
   'Designer',
+  'To Do List',
   'Cutting',
   'Printer',
   'Production',
@@ -90,26 +91,20 @@ const availableRoles = [
    'Price and Stock',
 ]
 
-const departmentPaths: Record<
-  string,
-  string
-> = {
+const departmentPaths: Record<string, string> = {
   Sales: '/departments/sales',
   Designer: '/departments/designer',
+  'To Do List': '/departments/todo',
   Cutting: '/departments/cutting',
   Printer: '/departments/printer',
   Production: '/departments/production',
-  'Production Manager':
-    '/departments/production-manager',
-  'Sales Manager':
-    '/departments/sales-manager',
+  'Production Manager': '/departments/production-manager',
+  'Sales Manager': '/departments/sales-manager',
   Accountant: '/departments/accountant',
   MD: '/departments/md',
   HR: '/departments/hr',
-  'Live Production':
-    '/departments/live-production',
-    'Price and Stock': '/departments/priceView',
-    
+  'Live Production': '/departments/live-production',
+  'Price and Stock': '/departments/priceView',
 }
 
 /*
@@ -1630,19 +1625,13 @@ function HomePage({
    * =========================================================
    */
 
-  const hasRole = (
-    role: string,
-  ) => {
-    return user.roles.some(
-      (userRole) =>
-        userRole
-          .trim()
-          .toLowerCase() ===
-        role
-          .trim()
-          .toLowerCase(),
-    )
-  }
+  const hasRole = (role: string) => {
+  return (user?.roles ?? []).some(
+    (userRole) =>
+      userRole.trim().toLowerCase() ===
+      role.trim().toLowerCase()
+  )
+}
 
   /*
    * =========================================================

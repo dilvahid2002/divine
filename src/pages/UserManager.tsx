@@ -20,6 +20,7 @@ interface User {
 
 const availableRoles = [
   'Sales',
+  'To Do List',
   'Designer',
   'Printer',
   'cutting',
@@ -31,7 +32,6 @@ const availableRoles = [
   'MD',
   'HR',
   'Price and Stock',
-  'Price Manager',
 ]
 
 function UserManager() {

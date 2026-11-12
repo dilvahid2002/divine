@@ -481,7 +481,7 @@ function PriceView() {
 
 
           {/* STOCK REPORT BUTTON */}
-
+                <h1>Stock Report</h1>
           <button
             type="button"
             className="add-item-button"
