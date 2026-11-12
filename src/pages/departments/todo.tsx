@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react'
 import {
   collection,
@@ -51,6 +50,7 @@ interface TodoTask {
 }
 
 type Filter = 'my-tasks' | 'assigned-by-me'
+type StatusFilter = 'all' | 'pending' | 'finished'
 
 // ==========================================
 // TODO COMPONENT
@@ -67,6 +67,8 @@ function Todo({ user }: TodoProps) {
 
   const [tasks, setTasks] = useState<TodoTask[]>([])
   const [filter, setFilter] = useState<Filter>('my-tasks')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [assignedByFilter, setAssignedByFilter] = useState('all')
 
   const [loading, setLoading] = useState(true)
   const [loadingStaff, setLoadingStaff] = useState(false)
@@ -201,19 +203,78 @@ function Todo({ user }: TodoProps) {
   // FILTER TASKS
   // ==========================================
 
-  const visibleTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      if (filter === 'my-tasks') {
-        return (
-          task.assignedTo.username === user.username
-        )
-      }
-
-      return (
-        task.assignedBy.username === user.username
-      )
-    })
+  // Tasks belonging to the current tab (before status filtering)
+  const tabTasks = useMemo(() => {
+    return tasks.filter((task) =>
+      filter === 'my-tasks'
+        ? task.assignedTo.username === user.username
+        : task.assignedBy.username === user.username
+    )
   }, [tasks, filter, user.username])
+
+  // People who have assigned tasks to me (for the "Assigned by" dropdown)
+  const assignedByOptions = useMemo(() => {
+    const map = new Map<string, { name: string; username: string; count: number }>()
+
+    tabTasks.forEach((task) => {
+      const { name, username } = task.assignedBy
+      if (!username) return
+
+      const existing = map.get(username)
+
+      if (existing) {
+        existing.count += 1
+      } else {
+        map.set(username, { name: name || username, username, count: 1 })
+      }
+    })
+
+    return Array.from(map.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    )
+  }, [tabTasks])
+
+  // Fall back to "all" if the selected person no longer has any tasks
+  const activeAssignedBy = assignedByOptions.some(
+    (option) => option.username === assignedByFilter
+  )
+    ? assignedByFilter
+    : 'all'
+
+  // Apply the "Assigned by" filter (only in the My Tasks tab)
+  const personTasks = useMemo(() => {
+    if (filter !== 'my-tasks' || activeAssignedBy === 'all') {
+      return tabTasks
+    }
+
+    return tabTasks.filter(
+      (task) => task.assignedBy.username === activeAssignedBy
+    )
+  }, [tabTasks, filter, activeAssignedBy])
+
+  // Counts for the status buttons (respect the "Assigned by" filter)
+  const statusCounts = useMemo(() => {
+    const finished = personTasks.filter((t) => t.finished).length
+
+    return {
+      finished,
+      pending: personTasks.length - finished,
+      total: personTasks.length,
+    }
+  }, [personTasks])
+
+  // Final list shown in the table
+  const visibleTasks = useMemo(() => {
+    if (statusFilter === 'finished') {
+      return personTasks.filter((t) => t.finished)
+    }
+
+    if (statusFilter === 'pending') {
+      return personTasks.filter((t) => !t.finished)
+    }
+
+    return personTasks
+  }, [personTasks, statusFilter])
 
   // ==========================================
   // ADD ANOTHER TASK INPUT
@@ -413,7 +474,7 @@ function Todo({ user }: TodoProps) {
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete this task?\\n\\n"${task.task}"`
+      `Are you sure you want to delete this task?\n\n"${task.task}"`
     )
 
     if (!confirmed) return
@@ -531,9 +592,10 @@ function Todo({ user }: TodoProps) {
                 ? 'active'
                 : ''
             }
-            onClick={() =>
+            onClick={() => {
               setFilter('assigned-by-me')
-            }
+              setAssignedByFilter('all')
+            }}
           >
             Assigned by Me
 
@@ -742,6 +804,85 @@ function Todo({ user }: TodoProps) {
 
           </div>
 
+          {/* ASSIGNED BY DROPDOWN (My Tasks only) */}
+
+          {filter === 'my-tasks' && (
+
+            <div className="todo-assigned-by-filter">
+
+              <label htmlFor="todo-assigned-by">
+                Assigned by
+              </label>
+
+              <select
+                id="todo-assigned-by"
+                value={activeAssignedBy}
+                onChange={(event) =>
+                  setAssignedByFilter(event.target.value)
+                }
+              >
+
+                <option value="all">
+                  All ({tabTasks.length})
+                </option>
+
+                {assignedByOptions.map((option) => (
+
+                  <option
+                    key={option.username}
+                    value={option.username}
+                  >
+                    {option.name} ({option.count})
+                  </option>
+
+                ))}
+
+              </select>
+
+            </div>
+
+          )}
+
+          {/* STATUS FILTER BUTTONS */}
+
+          <div
+            className="todo-status-filters"
+            role="group"
+            aria-label="Status filter"
+          >
+
+            <button
+              type="button"
+              className={`status-finished ${
+                statusFilter === 'finished' ? 'active' : ''
+              }`}
+              onClick={() => setStatusFilter('finished')}
+            >
+              Finished ({statusCounts.finished})
+            </button>
+
+            <button
+              type="button"
+              className={`status-pending ${
+                statusFilter === 'pending' ? 'active' : ''
+              }`}
+              onClick={() => setStatusFilter('pending')}
+            >
+              Pending ({statusCounts.pending})
+            </button>
+
+            <button
+              type="button"
+              className={`status-total ${
+                statusFilter === 'all' ? 'active' : ''
+              }`}
+              onClick={() => setStatusFilter('all')}
+            >
+              Total ({statusCounts.total})
+            </button>
+
+          </div>
+
           {/* LOADING */}
 
           {loading ? (
@@ -753,7 +894,9 @@ function Todo({ user }: TodoProps) {
           ) : visibleTasks.length === 0 ? (
 
             <div className="todo-empty">
-              No tasks found in this view.
+              {statusFilter === 'all'
+                ? 'No tasks found in this view.'
+                : `No ${statusFilter} tasks in this view.`}
             </div>
 
           ) : (

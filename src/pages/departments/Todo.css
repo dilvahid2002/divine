@@ -769,3 +769,71 @@
     justify-content: flex-start;
   }
 }
+.todo-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.todo-status-filters button {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1.5px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.todo-status-filters button:hover {
+  background: #f1f5f9;
+}
+
+.todo-status-filters .status-finished.active {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.todo-status-filters .status-pending.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #fff;
+}
+
+.todo-status-filters .status-total.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+.todo-assigned-by-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.todo-assigned-by-filter label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.todo-assigned-by-filter select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+  min-width: 180px;
+  cursor: pointer;
+}
+
+.todo-assigned-by-filter select:focus {
+  outline: none;
+  border-color: #2563eb;
+}
