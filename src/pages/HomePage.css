@@ -581,3 +581,70 @@
   outline: 3px solid rgba(37, 99, 235, 0.3);
   outline-offset: 2px;
 }
+/* =========================================
+   DEPARTMENT CARD WRAPPER + PENDING BADGE
+========================================= */
+
+/* Wrapper lets the badge sit on top of the card,
+   even when the card itself is greyed out */
+.department-card-wrapper {
+  position: relative;
+}
+
+/* Make the card fill the wrapper so the grid layout stays the same */
+.department-card-wrapper .department-card {
+  width: 100%;
+  height: 100%;
+}
+
+/* Red pending task badge */
+.department-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 5;
+
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+
+  background: #dc2626;
+  color: #ffffff;
+
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+
+  box-shadow: 0 3px 8px rgba(220, 38, 38, 0.45);
+
+  /* Let clicks pass through to the card underneath */
+  pointer-events: none;
+
+  animation: department-badge-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes department-badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .department-badge {
+    animation: none;
+  }
+}

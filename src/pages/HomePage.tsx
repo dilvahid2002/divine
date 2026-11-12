@@ -5,10 +5,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import {
+  collection,
   doc,
   onSnapshot,
+  query,
   setDoc,
   Timestamp,
+  where,
 } from 'firebase/firestore'
 
 import { db } from '../firebase'
@@ -88,7 +91,7 @@ const availableRoles = [
   'Accountant',
   'MD',
   'HR',
-   'Price and Stock',
+  'Price and Stock',
 ]
 
 const departmentPaths: Record<string, string> = {
@@ -198,6 +201,13 @@ function HomePage({
     useState(false)
 
   /*
+   * Number of PENDING tasks assigned to the logged-in user
+   * (shown as a red badge on the "To Do List" card)
+   */
+  const [pendingTodoCount, setPendingTodoCount] =
+    useState(0)
+
+  /*
    * =========================================================
    * FIRESTORE DUTY DOCUMENT
    *
@@ -216,6 +226,51 @@ function HomePage({
       ),
     [user.username],
   )
+
+  /*
+   * =========================================================
+   * LIVE PENDING TASK COUNT
+   *
+   * Listens to todos assigned to this user and counts the
+   * ones that are not finished.
+   * =========================================================
+   */
+
+  useEffect(() => {
+    const todosQuery = query(
+      collection(db, 'todos'),
+      where(
+        'assignedTo.username',
+        '==',
+        user.username,
+      ),
+    )
+
+    const unsubscribe = onSnapshot(
+      todosQuery,
+
+      (snapshot) => {
+        const pending =
+          snapshot.docs.filter(
+            (todoDoc) =>
+              !todoDoc.data().finished,
+          ).length
+
+        setPendingTodoCount(pending)
+      },
+
+      (error) => {
+        console.error(
+          'Unable to load pending tasks:',
+          error,
+        )
+
+        setPendingTodoCount(0)
+      },
+    )
+
+    return unsubscribe
+  }, [user.username])
 
   /*
    * =========================================================
@@ -382,6 +437,8 @@ function HomePage({
             data.dutyDate
               ? data.dutyDate
               : today
+
+          void activeDutyDate
 
           /*
            * =================================================
@@ -1626,12 +1683,12 @@ function HomePage({
    */
 
   const hasRole = (role: string) => {
-  return (user?.roles ?? []).some(
-    (userRole) =>
-      userRole.trim().toLowerCase() ===
-      role.trim().toLowerCase()
-  )
-}
+    return (user?.roles ?? []).some(
+      (userRole) =>
+        userRole.trim().toLowerCase() ===
+        role.trim().toLowerCase(),
+    )
+  }
 
   /*
    * =========================================================
@@ -2251,6 +2308,10 @@ function HomePage({
 
           {/* =================================================
               OTHER DEPARTMENTS
+
+              Each card is wrapped in a div so the red pending
+              badge stays fully visible even when the card
+              itself is greyed out (duty not started).
               ================================================= */}
 
           {availableRoles
@@ -2265,43 +2326,68 @@ function HomePage({
                   role,
                 )
 
+              const showPendingBadge =
+                role === 'To Do List' &&
+                pendingTodoCount > 0
+
               return (
 
-                <button
+                <div
                   key={role}
-                  type="button"
-                  className={`department-card ${
-                    isActive
-                      ? 'active'
-                      : 'disabled'
-                  }`}
-                  disabled={
-                    !isActive
-                  }
-                  onClick={() =>
-                    handleDepartmentClick(
-                      role,
-                    )
-                  }
+                  className="department-card-wrapper"
                 >
 
-                  <div className="department-icon">
-                    {role.charAt(0)}
-                  </div>
+                  <button
+                    type="button"
+                    className={`department-card ${
+                      isActive
+                        ? 'active'
+                        : 'disabled'
+                    }`}
+                    disabled={
+                      !isActive
+                    }
+                    onClick={() =>
+                      handleDepartmentClick(
+                        role,
+                      )
+                    }
+                  >
 
-                  <div className="department-name">
-                    {role}
-                  </div>
+                    <div className="department-icon">
+                      {role.charAt(0)}
+                    </div>
 
-                  <div className="department-status">
-                    {isActive
-                      ? 'Available'
-                      : hasRole(role)
-                        ? 'Duty Required'
-                        : 'No Access'}
-                  </div>
+                    <div className="department-name">
+                      {role}
+                    </div>
 
-                </button>
+                    <div className="department-status">
+                      {isActive
+                        ? 'Available'
+                        : hasRole(role)
+                          ? 'Duty Required'
+                          : 'No Access'}
+                    </div>
+
+                  </button>
+
+                  {/* RED PENDING TASK BADGE */}
+
+                  {showPendingBadge && (
+
+                    <span
+                      className="department-badge"
+                      title={`${pendingTodoCount} pending task(s)`}
+                    >
+                      {pendingTodoCount > 99
+                        ? '99+'
+                        : pendingTodoCount}
+                    </span>
+
+                  )}
+
+                </div>
 
               )
             })}
