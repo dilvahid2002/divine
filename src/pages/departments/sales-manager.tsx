@@ -132,6 +132,13 @@ interface DepartmentRowWithFiles extends DepartmentRow {
   files: CompletedFile[]
 }
 
+const departmentLabels: Record<DepartmentType, string> = {
+  designer: 'Designer',
+  printer: 'Printer',
+  cutting: 'Cutting',
+  production: 'Production',
+}
+
 const getString = (value: unknown): string => {
   if (typeof value === 'string' || typeof value === 'number') {
     return String(value)
@@ -378,6 +385,147 @@ const sortRows = <T extends { name: string }>(rows: T[]): T[] => {
   return [...rows].sort((a, b) => a.name.localeCompare(b.name))
 }
 
+const escapeHtml = (value: string): string => {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/*
+ * PRINT HELPER
+ *
+ * Copies the HTML of the element with the given id into a hidden iframe,
+ * adds the app's stylesheets plus print-friendly rules, then opens the
+ * browser print dialog. Anything with the "no-print" class (View buttons,
+ * Close/Print buttons) is hidden in the printed output.
+ */
+const printElement = (
+  elementId: string,
+  title: string,
+  subtitle: string,
+): void => {
+  const element = document.getElementById(elementId)
+
+  if (!element) {
+    return
+  }
+
+  const styles = Array.from(
+    document.querySelectorAll('link[rel="stylesheet"], style'),
+  )
+    .map((node) => node.outerHTML)
+    .join('\n')
+
+  const printedAt = new Date().toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  const iframe = document.createElement('iframe')
+
+  iframe.style.cssText =
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'
+
+  document.body.appendChild(iframe)
+
+  const printWindow = iframe.contentWindow
+  const printDocument = printWindow?.document
+
+  if (!printWindow || !printDocument) {
+    document.body.removeChild(iframe)
+    return
+  }
+
+  printDocument.open()
+
+  printDocument.write(`<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${escapeHtml(title)}</title>
+    ${styles}
+    <style>
+      @page { size: A4 landscape; margin: 12mm; }
+
+      html, body {
+        background: #fff !important;
+        color: #000 !important;
+        margin: 0;
+        padding: 0;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body { padding: 8px; }
+
+      .no-print { display: none !important; }
+
+      .print-header {
+        margin-bottom: 14px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #000;
+      }
+
+      .print-header h1 { margin: 0 0 4px; font-size: 20px; }
+      .print-header p { margin: 2px 0; font-size: 12px; }
+
+      .items-table-wrapper {
+        overflow: visible !important;
+        max-height: none !important;
+      }
+
+      table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 11px;
+      }
+
+      th, td {
+        border: 1px solid #444 !important;
+        padding: 5px 7px !important;
+        text-align: left;
+        vertical-align: top;
+        color: #000 !important;
+        background: #fff !important;
+      }
+
+      th { background: #eee !important; }
+
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+      tr { page-break-inside: avoid; }
+
+      h2, h3 { color: #000 !important; }
+    </style>
+  </head>
+  <body>
+    <div class="print-header">
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(subtitle)}</p>
+      <p>Printed on: ${escapeHtml(printedAt)}</p>
+    </div>
+    ${element.innerHTML}
+  </body>
+</html>`)
+
+  printDocument.close()
+
+  window.setTimeout(() => {
+    printWindow.focus()
+    printWindow.print()
+
+    window.setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe)
+      }
+    }, 1500)
+  }, 600)
+}
+
 function SalesManager({ user }: SalesManagerProps) {
   const navigate = useNavigate()
 
@@ -614,9 +762,9 @@ function SalesManager({ user }: SalesManagerProps) {
         job,
         completedItems: job.items.filter(
           (item) =>
-            item.cuttingStatus !== 'na' &&
-            item.cuttingStatus !== 'NA' &&
-            item.cuttingStatus !== 'not applicable',
+            item.printStatus !== 'na' &&
+            item.printStatus !== 'NA' &&
+            item.printStatus !== 'not applicable',
         ),
       })
 
@@ -663,9 +811,9 @@ function SalesManager({ user }: SalesManagerProps) {
         job,
         completedItems: job.items.filter(
           (item) =>
-            item.printStatus !== 'na' &&
-            item.printStatus !== 'NA' &&
-            item.printStatus !== 'not applicable',
+            item.cuttingStatus !== 'na' &&
+            item.cuttingStatus !== 'NA' &&
+            item.cuttingStatus !== 'not applicable',
         ),
       })
 
@@ -756,17 +904,64 @@ function SalesManager({ user }: SalesManagerProps) {
     setViewDepartment(null)
   }
 
-  // Designer view: group the selected designer's files by the day the
-  // design was finished, so each day gets its own table (oldest first).
-  const designerDayGroups = useMemo(() => {
-    if (!viewRow || viewDepartment !== 'designer') {
+  const rangeLabel = validRange
+    ? `Date range: ${formatDate(dateFrom)} to ${formatDate(dateTo)}`
+    : 'Date range: not selected'
+
+  const printDepartment = (
+    elementId: string,
+    department: DepartmentType,
+  ) => {
+    printElement(
+      elementId,
+      `${departmentLabels[department]} Performance`,
+      rangeLabel,
+    )
+  }
+
+  const printModal = () => {
+    if (!viewRow || !viewDepartment) {
+      return
+    }
+
+    printElement(
+      'print-modal-content',
+      `${departmentLabels[viewDepartment]} Completed Files — ${viewRow.name}`,
+      `${rangeLabel} • ${viewRow.completedWorks} completed file(s)${
+        viewRow.username ? ` • ${viewRow.username}` : ''
+      }`,
+    )
+  }
+
+  // Group every department's completed files by the day the work was finished.
+  // Printing uses printCompletedAt, just as Design uses designFinishedAt.
+  const dayGroups = useMemo(() => {
+    if (
+      !viewRow ||
+      (viewDepartment !== 'designer' &&
+        viewDepartment !== 'printer' &&
+        viewDepartment !== 'cutting' &&
+        viewDepartment !== 'production')
+    ) {
       return []
     }
 
     const map = new Map<string, CompletedFile[]>()
 
     viewRow.files.forEach((file) => {
-      const key = timestampDateKey(file.job.designFinishedAt) || 'unknown'
+      let finishedAt: Timestamp | undefined
+
+      if (viewDepartment === 'designer') {
+        finishedAt = file.job.designFinishedAt
+      } else if (viewDepartment === 'printer') {
+        finishedAt = file.job.officeInfo.printCompletedAt
+      } else if (viewDepartment === 'cutting') {
+        finishedAt = file.job.officeInfo.cuttingCompletedAt
+      } else {
+        finishedAt = file.job.officeInfo.productionCompletedAt
+      }
+
+      const key = timestampDateKey(finishedAt) || 'unknown'
       const list = map.get(key) || []
       list.push(file)
       map.set(key, list)
@@ -776,6 +971,12 @@ function SalesManager({ user }: SalesManagerProps) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([dateKey, files]) => ({ dateKey, files }))
   }, [viewRow, viewDepartment])
+
+  const isDayWiseView =
+    viewDepartment === 'designer' ||
+    viewDepartment === 'printer' ||
+    viewDepartment === 'cutting' ||
+    viewDepartment === 'production'
 
   if (loading) {
     return (
@@ -902,12 +1103,21 @@ function SalesManager({ user }: SalesManagerProps) {
                 range is based on the exact Design Finished timestamp.
               </p>
             </div>
+
+            <button
+              type="button"
+              className="add-item-button"
+              disabled={designerRows.length === 0}
+              onClick={() => printDepartment('print-designer', 'designer')}
+            >
+              Print
+            </button>
           </div>
 
           {designerRows.length === 0 ? (
             tableEmpty
           ) : (
-            <div className="items-table-wrapper">
+            <div className="items-table-wrapper" id="print-designer">
               <table className="items-table">
                 <thead>
                   <tr>
@@ -915,7 +1125,7 @@ function SalesManager({ user }: SalesManagerProps) {
                     <th>Username</th>
                     <th>Completed Works</th>
                     <th>Total Design Charge</th>
-                    <th>View</th>
+                    <th className="no-print">View</th>
                   </tr>
                 </thead>
 
@@ -936,7 +1146,7 @@ function SalesManager({ user }: SalesManagerProps) {
                         })}
                       </td>
 
-                      <td>
+                      <td className="no-print">
                         <button
                           type="button"
                           className="add-item-button"
@@ -967,12 +1177,21 @@ function SalesManager({ user }: SalesManagerProps) {
                 range uses Print Finished date.
               </p>
             </div>
+
+            <button
+              type="button"
+              className="add-item-button"
+              disabled={printerRows.length === 0}
+              onClick={() => printDepartment('print-printer', 'printer')}
+            >
+              Print
+            </button>
           </div>
 
           {printerRows.length === 0 ? (
             tableEmpty
           ) : (
-            <div className="items-table-wrapper">
+            <div className="items-table-wrapper" id="print-printer">
               <table className="items-table">
                 <thead>
                   <tr>
@@ -980,7 +1199,7 @@ function SalesManager({ user }: SalesManagerProps) {
                     <th>Username</th>
                     <th>Completed Works</th>
                     <th>Total Square Feet</th>
-                    <th>View</th>
+                    <th className="no-print">View</th>
                   </tr>
                 </thead>
 
@@ -995,7 +1214,7 @@ function SalesManager({ user }: SalesManagerProps) {
 
                       <td>{(row.totalSquareFeet || 0).toFixed(2)} sq ft</td>
 
-                      <td>
+                      <td className="no-print">
                         <button
                           type="button"
                           className="add-item-button"
@@ -1026,12 +1245,21 @@ function SalesManager({ user }: SalesManagerProps) {
                 range uses Cutting Finished date.
               </p>
             </div>
+
+            <button
+              type="button"
+              className="add-item-button"
+              disabled={cuttingRows.length === 0}
+              onClick={() => printDepartment('print-cutting', 'cutting')}
+            >
+              Print
+            </button>
           </div>
 
           {cuttingRows.length === 0 ? (
             tableEmpty
           ) : (
-            <div className="items-table-wrapper">
+            <div className="items-table-wrapper" id="print-cutting">
               <table className="items-table">
                 <thead>
                   <tr>
@@ -1039,7 +1267,7 @@ function SalesManager({ user }: SalesManagerProps) {
                     <th>Username</th>
                     <th>Completed Works</th>
                     <th>Total Square Feet</th>
-                    <th>View</th>
+                    <th className="no-print">View</th>
                   </tr>
                 </thead>
 
@@ -1054,7 +1282,7 @@ function SalesManager({ user }: SalesManagerProps) {
 
                       <td>{(row.totalSquareFeet || 0).toFixed(2)} sq ft</td>
 
-                      <td>
+                      <td className="no-print">
                         <button
                           type="button"
                           className="add-item-button"
@@ -1085,19 +1313,28 @@ function SalesManager({ user }: SalesManagerProps) {
                 Production Completed date.
               </p>
             </div>
+
+            <button
+              type="button"
+              className="add-item-button"
+              disabled={productionRows.length === 0}
+              onClick={() => printDepartment('print-production', 'production')}
+            >
+              Print
+            </button>
           </div>
 
           {productionRows.length === 0 ? (
             tableEmpty
           ) : (
-            <div className="items-table-wrapper">
+            <div className="items-table-wrapper" id="print-production">
               <table className="items-table">
                 <thead>
                   <tr>
                     <th>Production Staff</th>
                     <th>Username</th>
                     <th>Completed Works</th>
-                    <th>View</th>
+                    <th className="no-print">View</th>
                   </tr>
                 </thead>
 
@@ -1110,7 +1347,7 @@ function SalesManager({ user }: SalesManagerProps) {
 
                       <td>{row.completedWorks}</td>
 
-                      <td>
+                      <td className="no-print">
                         <button
                           type="button"
                           className="add-item-button"
@@ -1156,328 +1393,404 @@ function SalesManager({ user }: SalesManagerProps) {
               }}
               onClick={(event) => event.stopPropagation()}
             >
-              {/* MODAL HEADER */}
-              <div
-                className="section-heading-row"
-                style={{ marginBottom: '20px' }}
-              >
-                <div>
-                  <h2>
-                    Completed Files
-                    {' — '}
-                    {viewRow.name}
-                  </h2>
-
-                  <p>
-                    {viewRow.completedWorks} completed file(s)
-                    {viewRow.username ? ` • ${viewRow.username}` : ''}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  className="clear-filter-button"
-                  onClick={closeView}
+              {/* Everything inside this wrapper is what gets printed */}
+              <div id="print-modal-content">
+                {/* MODAL HEADER */}
+                <div
+                  className="section-heading-row"
+                  style={{ marginBottom: '20px' }}
                 >
-                  Close
-                </button>
-              </div>
+                  <div>
+                    <h2>
+                      Completed Files
+                      {' — '}
+                      {viewRow.name}
+                    </h2>
 
-              {/* FILES */}
-              {viewRow.files.length === 0 ? (
-                <div className="empty-items">No completed files found.</div>
-              ) : viewDepartment === 'designer' ? (
-                /* ---------- DESIGNER: one table per day ---------- */
-                designerDayGroups.map(({ dateKey, files }) => (
-                <div key={dateKey} style={{ marginBottom: '24px' }}>
-                  <h3 style={{ margin: '0 0 4px' }}>{formatDate(dateKey)}</h3>
-                  <p style={{ margin: '0 0 10px' }}>
-                    {files.length} completed file(s)
-                  </p>
-                <div className="items-table-wrapper">
-                  <table className="items-table">
-                    <thead>
-                      <tr>
-                        <th>Job ID</th>
-                        <th>Customer</th>
-                        <th>Customer Adviser</th>
-                        <th>Bill No</th>
-                        <th>Item</th>
-                        <th>Size</th>
-                        <th>Qty</th>
-                        <th>Design Charge</th>
-                      </tr>
-                    </thead>
+                    <p>
+                      {viewRow.completedWorks} completed file(s)
+                      {viewRow.username ? ` • ${viewRow.username}` : ''}
+                    </p>
+                  </div>
 
-                    <tbody>
-                      {files.flatMap(({ job, completedItems }) => {
-                        const adviser =
-                          job.customerAdviser.name ||
-                          job.customerAdviser.username ||
-                          '-'
-
-                        // Bill No: no data yet, shows '-' until job.billNo is filled.
-                        const billNo = job.billNo || '-'
-
-                        if (completedItems.length === 0) {
-                          return [
-                            <tr key={`${job.source}-${job.id}`}>
-                              <td>{job.orderId}</td>
-                              <td>{job.customer.name || '-'}</td>
-                              <td>{adviser}</td>
-                              <td>{billNo}</td>
-                              <td colSpan={3}>No non-NA items in this file.</td>
-                              <td>
-                                ₹{Number(job.designCharge || 0).toFixed(2)}
-                              </td>
-                            </tr>,
-                          ]
-                        }
-
-                        return completedItems.map((item, itemIndex) => (
-                          <tr key={`${job.source}-${job.id}-${itemIndex}`}>
-                            {itemIndex === 0 && (
-                              <>
-                                <td rowSpan={completedItems.length}>
-                                  {job.orderId}
-                                </td>
-                                <td rowSpan={completedItems.length}>
-                                  {job.customer.name || '-'}
-                                </td>
-                                <td rowSpan={completedItems.length}>
-                                  {adviser}
-                                </td>
-                                <td rowSpan={completedItems.length}>
-                                  {billNo}
-                                </td>
-                              </>
-                            )}
-
-                            <td>{item.name || '-'}</td>
-
-                            <td>
-                              {item.width || '-'} × {item.height || '-'}
-                            </td>
-
-                            <td>{item.qty || '-'}</td>
-
-                            {itemIndex === 0 && (
-                              <td rowSpan={completedItems.length}>
-                                ₹{Number(job.designCharge || 0).toFixed(2)}
-                              </td>
-                            )}
-                          </tr>
-                        ))
-                      })}
-                    </tbody>
-
-                    <tfoot>
-                      <tr>
-                        <td colSpan={7} style={{ textAlign: 'right' }}>
-                          <strong>Total Design Charge</strong>
-                        </td>
-                        <td>
-                          <strong>
-                            ₹
-                            {files
-                              .reduce(
-                                (sum, { job }) => sum + (job.designCharge || 0),
-                                0,
-                              )
-                              .toFixed(2)}
-                          </strong>
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-                </div>
-                ))
-              ) : (
-                /* ---------- OTHER DEPARTMENTS: card per file (unchanged) ---------- */
-                viewRow.files.map(({ job, completedItems }, fileIndex) => (
                   <div
-                    key={`${job.source}-${job.id}`}
-                    style={{
-                      border: '1px solid #ddd',
-                      borderRadius: '10px',
-                      padding: '16px',
-                      marginBottom: '14px',
-                    }}
+                    className="no-print"
+                    style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}
                   >
-                    {/* FILE INFO */}
+                    <button
+                      type="button"
+                      className="add-item-button"
+                      onClick={printModal}
+                    >
+                      Print
+                    </button>
+
+                    <button
+                      type="button"
+                      className="clear-filter-button"
+                      onClick={closeView}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+
+                {/* FILES */}
+                {viewRow.files.length === 0 ? (
+                  <div className="empty-items">No completed files found.</div>
+                ) : isDayWiseView ? (
+                  /* ---------- ALL DEPARTMENTS: one table per completion day ---------- */
+                  dayGroups.map(({ dateKey, files }) => (
+                    <div key={dateKey} style={{ marginBottom: '24px' }}>
+                      <h3 style={{ margin: '0 0 4px' }}>
+                        {formatDate(dateKey)}
+                      </h3>
+                      <p style={{ margin: '0 0 10px' }}>
+                        {files.length} completed file(s)
+                      </p>
+                      <div className="items-table-wrapper">
+                        <table className="items-table">
+                          <thead>
+                            <tr>
+                              <th>Job ID</th>
+                              <th>Customer</th>
+                              <th>Customer Adviser</th>
+                              <th>Bill No</th>
+                              <th>Item</th>
+                              <th>Size</th>
+                              <th>Qty</th>
+                              {viewDepartment === 'designer' && (
+                                <th>Design Charge</th>
+                              )}
+                              {(viewDepartment === 'printer' || viewDepartment === 'cutting') && (
+                                <th>Total Square Feet</th>
+                              )}
+                              {viewDepartment === 'production' && (
+                                <th>Remarks</th>
+                              )}
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {files.flatMap(({ job, completedItems }) => {
+                              const adviser =
+                                job.customerAdviser.name ||
+                                job.customerAdviser.username ||
+                                '-'
+
+                              // Bill No: no data yet, shows '-' until job.billNo is filled.
+                              const billNo = job.billNo || '-'
+
+                              if (completedItems.length === 0) {
+                                return [
+                                  <tr key={`${job.source}-${job.id}`}>
+                                    <td>{job.orderId}</td>
+                                    <td>{job.customer.name || '-'}</td>
+                                    <td>{adviser}</td>
+                                    <td>{billNo}</td>
+                                    <td colSpan={3}>
+                                      No non-NA items in this file.
+                                    </td>
+                                    <td>
+                                      {viewDepartment === 'designer' &&
+                                        `₹${Number(
+                                          job.designCharge || 0,
+                                        ).toFixed(2)}`}
+                                      {(viewDepartment === 'printer' || viewDepartment === 'cutting') &&
+                                        `${getSquareFeet(job.items).toFixed(
+                                          2,
+                                        )} sq ft`}
+                                      {viewDepartment === 'production' && '-'}
+                                    </td>
+                                  </tr>,
+                                ]
+                              }
+
+                              return completedItems.map((item, itemIndex) => (
+                                <tr
+                                  key={`${job.source}-${job.id}-${itemIndex}`}
+                                >
+                                  {itemIndex === 0 && (
+                                    <>
+                                      <td rowSpan={completedItems.length}>
+                                        {job.orderId}
+                                      </td>
+                                      <td rowSpan={completedItems.length}>
+                                        {job.customer.name || '-'}
+                                      </td>
+                                      <td rowSpan={completedItems.length}>
+                                        {adviser}
+                                      </td>
+                                      <td rowSpan={completedItems.length}>
+                                        {billNo}
+                                      </td>
+                                    </>
+                                  )}
+
+                                  <td>{item.name || '-'}</td>
+
+                                  <td>
+                                    {item.width || '-'} × {item.height || '-'}
+                                  </td>
+
+                                  <td>{item.qty || '-'}</td>
+
+                                  {viewDepartment === 'designer' &&
+                                    itemIndex === 0 && (
+                                      <td rowSpan={completedItems.length}>
+                                        ₹
+                                        {Number(job.designCharge || 0).toFixed(
+                                          2,
+                                        )}
+                                      </td>
+                                    )}
+
+                                  {(viewDepartment === 'printer' ||
+                                    viewDepartment === 'cutting') &&
+                                    itemIndex === 0 && (
+                                      <td rowSpan={completedItems.length}>
+                                        {getSquareFeet(job.items).toFixed(2)} sq
+                                        ft
+                                      </td>
+                                    )}
+
+                                  {viewDepartment === 'production' && (
+                                    <td>{item.remarks || '-'}</td>
+                                  )}
+                                </tr>
+                              ))
+                            })}
+                          </tbody>
+
+                          <tfoot>
+                            <tr>
+                              <td colSpan={7} style={{ textAlign: 'right' }}>
+                                <strong>
+                                  {viewDepartment === 'designer' &&
+                                    'Total Design Charge'}
+                                  {(viewDepartment === 'printer' || viewDepartment === 'cutting') &&
+                                    'Total Square Feet'}
+                                  {viewDepartment === 'production' &&
+                                    'Total Completed Files'}
+                                </strong>
+                              </td>
+                              <td>
+                                <strong>
+                                  {viewDepartment === 'designer' &&
+                                    `₹${files
+                                      .reduce(
+                                        (sum, { job }) =>
+                                          sum + (job.designCharge || 0),
+                                        0,
+                                      )
+                                      .toFixed(2)}`}
+                                  {(viewDepartment === 'printer' || viewDepartment === 'cutting') &&
+                                    `${files
+                                      .reduce(
+                                        (sum, { job }) =>
+                                          sum + getSquareFeet(job.items),
+                                        0,
+                                      )
+                                      .toFixed(2)} sq ft`}
+                                  {viewDepartment === 'production' &&
+                                    files.length}
+                                </strong>
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  /* ---------- OTHER DEPARTMENTS: card per file ---------- */
+                  viewRow.files.map(({ job, completedItems }, fileIndex) => (
                     <div
+                      key={`${job.source}-${job.id}`}
                       style={{
-                        display: 'grid',
-                        gridTemplateColumns:
-                          'repeat(auto-fit, minmax(180px, 1fr))',
-                        gap: '10px',
+                        border: '1px solid #ddd',
+                        borderRadius: '10px',
+                        padding: '16px',
                         marginBottom: '14px',
                       }}
                     >
-                      <div>
-                        <strong>File {fileIndex + 1}</strong>
-                      </div>
-
-                      <div>
-                        <strong>Job ID:</strong> {job.orderId}
-                      </div>
-
-                      <div>
-                        <strong>Customer:</strong> {job.customer.name || '-'}
-                      </div>
-
-                      <div>
-                        <strong>Company:</strong>{' '}
-                        {job.customer.companyName || '-'}
-                      </div>
-
-                      <div>
-                        <strong>Entry Date:</strong> {formatDate(job.date)}
-                      </div>
-
-                      {viewDepartment === 'printer' && (
+                      {/* FILE INFO */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns:
+                            'repeat(auto-fit, minmax(180px, 1fr))',
+                          gap: '10px',
+                          marginBottom: '14px',
+                        }}
+                      >
                         <div>
-                          <strong>Print Finished:</strong>{' '}
-                          {job.officeInfo.printCompletedAt
-                            ? job.officeInfo.printCompletedAt
-                                .toDate()
-                                .toLocaleString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                            : '-'}
+                          <strong>File {fileIndex + 1}</strong>
                         </div>
-                      )}
 
-                      {viewDepartment === 'cutting' && (
                         <div>
-                          <strong>Cutting Finished:</strong>{' '}
-                          {job.officeInfo.cuttingCompletedAt
-                            ? job.officeInfo.cuttingCompletedAt
-                                .toDate()
-                                .toLocaleString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                            : '-'}
+                          <strong>Job ID:</strong> {job.orderId}
                         </div>
-                      )}
 
-                      {viewDepartment === 'production' && (
                         <div>
-                          <strong>Production Completed:</strong>{' '}
-                          {job.officeInfo.productionCompletedAt
-                            ? job.officeInfo.productionCompletedAt
-                                .toDate()
-                                .toLocaleString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                            : '-'}
+                          <strong>Customer:</strong> {job.customer.name || '-'}
                         </div>
-                      )}
 
-                      <div>
-                        <strong>Branch:</strong> {job.branch || '-'}
+                        <div>
+                          <strong>Company:</strong>{' '}
+                          {job.customer.companyName || '-'}
+                        </div>
+
+                        <div>
+                          <strong>Entry Date:</strong> {formatDate(job.date)}
+                        </div>
+
+                        {viewDepartment === 'printer' && (
+                          <div>
+                            <strong>Print Finished:</strong>{' '}
+                            {job.officeInfo.printCompletedAt
+                              ? job.officeInfo.printCompletedAt
+                                  .toDate()
+                                  .toLocaleString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })
+                              : '-'}
+                          </div>
+                        )}
+
+                        {viewDepartment === 'cutting' && (
+                          <div>
+                            <strong>Cutting Finished:</strong>{' '}
+                            {job.officeInfo.cuttingCompletedAt
+                              ? job.officeInfo.cuttingCompletedAt
+                                  .toDate()
+                                  .toLocaleString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })
+                              : '-'}
+                          </div>
+                        )}
+
+                        {viewDepartment === 'production' && (
+                          <div>
+                            <strong>Production Completed:</strong>{' '}
+                            {job.officeInfo.productionCompletedAt
+                              ? job.officeInfo.productionCompletedAt
+                                  .toDate()
+                                  .toLocaleString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })
+                              : '-'}
+                          </div>
+                        )}
+
+                        <div>
+                          <strong>Branch:</strong> {job.branch || '-'}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* DEPARTMENT-SPECIFIC TABLE */}
-                    <div className="items-table-wrapper">
-                      <table className="items-table">
-                        <thead>
-                          <tr>
-                            <th>Job ID</th>
-                            <th>Customer</th>
-                            <th>Item</th>
-                            <th>Size</th>
-                            <th>Qty</th>
-
-                            {(viewDepartment === 'printer' ||
-                              viewDepartment === 'cutting') && (
-                              <th>Total Square Feet</th>
-                            )}
-
-                            {viewDepartment === 'production' && (
-                              <th>Remarks</th>
-                            )}
-                          </tr>
-                        </thead>
-
-                        <tbody>
-                          {completedItems.length === 0 ? (
+                      {/* DEPARTMENT-SPECIFIC TABLE */}
+                      <div className="items-table-wrapper">
+                        <table className="items-table">
+                          <thead>
                             <tr>
-                              <td colSpan={6}>No non-NA items in this file.</td>
+                              <th>Job ID</th>
+                              <th>Customer</th>
+                              <th>Item</th>
+                              <th>Size</th>
+                              <th>Qty</th>
+
+                              {(viewDepartment === 'printer' ||
+                                viewDepartment === 'cutting') && (
+                                <th>Total Square Feet</th>
+                              )}
+
+                              {viewDepartment === 'production' && (
+                                <th>Remarks</th>
+                              )}
                             </tr>
-                          ) : (
-                            completedItems.map((item, itemIndex) => (
-                              <tr key={`${job.id}-${itemIndex}`}>
-                                {/* JOB ID */}
-                                {itemIndex === 0 && (
-                                  <td rowSpan={completedItems.length}>
-                                    {job.orderId}
-                                  </td>
-                                )}
+                          </thead>
 
-                                {/* CUSTOMER */}
-                                {itemIndex === 0 && (
-                                  <td rowSpan={completedItems.length}>
-                                    {job.customer.name}
-                                  </td>
-                                )}
-
-                                {/* ITEM */}
-                                <td>{item.name || '-'}</td>
-
-                                {/* SIZE */}
-                                <td>
-                                  {item.width || '-'} × {item.height || '-'}
+                          <tbody>
+                            {completedItems.length === 0 ? (
+                              <tr>
+                                <td colSpan={6}>
+                                  No non-NA items in this file.
                                 </td>
-
-                                {/* QTY */}
-                                <td>{item.qty || '-'}</td>
-
-                                {/* PRINTER */}
-                                {viewDepartment === 'printer' &&
-                                  itemIndex === 0 && (
-                                    <td rowSpan={completedItems.length}>
-                                      {getSquareFeet(job.items).toFixed(2)} sq
-                                      ft
-                                    </td>
-                                  )}
-
-                                {/* CUTTING */}
-                                {viewDepartment === 'cutting' &&
-                                  itemIndex === 0 && (
-                                    <td rowSpan={completedItems.length}>
-                                      {getSquareFeet(job.items).toFixed(2)} sq
-                                      ft
-                                    </td>
-                                  )}
-
-                                {/* PRODUCTION */}
-                                {viewDepartment === 'production' && (
-                                  <td>{item.remarks || '-'}</td>
-                                )}
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                            ) : (
+                              completedItems.map((item, itemIndex) => (
+                                <tr key={`${job.id}-${itemIndex}`}>
+                                  {/* JOB ID */}
+                                  {itemIndex === 0 && (
+                                    <td rowSpan={completedItems.length}>
+                                      {job.orderId}
+                                    </td>
+                                  )}
+
+                                  {/* CUSTOMER */}
+                                  {itemIndex === 0 && (
+                                    <td rowSpan={completedItems.length}>
+                                      {job.customer.name}
+                                    </td>
+                                  )}
+
+                                  {/* ITEM */}
+                                  <td>{item.name || '-'}</td>
+
+                                  {/* SIZE */}
+                                  <td>
+                                    {item.width || '-'} × {item.height || '-'}
+                                  </td>
+
+                                  {/* QTY */}
+                                  <td>{item.qty || '-'}</td>
+
+                                  {/* PRINTER */}
+                                  {viewDepartment === 'printer' &&
+                                    itemIndex === 0 && (
+                                      <td rowSpan={completedItems.length}>
+                                        {getSquareFeet(job.items).toFixed(2)} sq
+                                        ft
+                                      </td>
+                                    )}
+
+                                  {/* CUTTING */}
+                                  {(viewDepartment === 'printer' ||
+                                    viewDepartment === 'cutting') &&
+                                    itemIndex === 0 && (
+                                      <td rowSpan={completedItems.length}>
+                                        {getSquareFeet(job.items).toFixed(2)} sq
+                                        ft
+                                      </td>
+                                    )}
+
+                                  {/* PRODUCTION */}
+                                  {viewDepartment === 'production' && (
+                                    <td>{item.remarks || '-'}</td>
+                                  )}
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
         )}
