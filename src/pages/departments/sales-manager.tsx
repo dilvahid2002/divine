@@ -1106,7 +1106,7 @@ function SalesManager({ user }: SalesManagerProps) {
 
             <button
               type="button"
-              className="add-item-button"
+              className="add-item-button1"
               disabled={designerRows.length === 0}
               onClick={() => printDepartment('print-designer', 'designer')}
             >
@@ -1180,7 +1180,7 @@ function SalesManager({ user }: SalesManagerProps) {
 
             <button
               type="button"
-              className="add-item-button"
+              className="add-item-button1"
               disabled={printerRows.length === 0}
               onClick={() => printDepartment('print-printer', 'printer')}
             >
@@ -1248,7 +1248,7 @@ function SalesManager({ user }: SalesManagerProps) {
 
             <button
               type="button"
-              className="add-item-button"
+              className="add-item-button1"
               disabled={cuttingRows.length === 0}
               onClick={() => printDepartment('print-cutting', 'cutting')}
             >
@@ -1316,7 +1316,7 @@ function SalesManager({ user }: SalesManagerProps) {
 
             <button
               type="button"
-              className="add-item-button"
+              className="add-item-button1"
               disabled={productionRows.length === 0}
               onClick={() => printDepartment('print-production', 'production')}
             >
@@ -1419,7 +1419,7 @@ function SalesManager({ user }: SalesManagerProps) {
                   >
                     <button
                       type="button"
-                      className="add-item-button"
+                      className="add-item-button1"
                       onClick={printModal}
                     >
                       Print
