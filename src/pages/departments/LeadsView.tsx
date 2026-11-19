@@ -61,6 +61,7 @@ interface Lead {
   }
   createdAt?: Timestamp
   status: LeadStatus
+  remarks: string
   updates: LeadUpdate[]
 }
 
@@ -108,8 +109,20 @@ const normalizeLead = (id: string, data: any): Lead => ({
   },
   createdAt: data.createdAt,
   status: (STATUSES.includes(data.status) ? data.status : 'Hold') as LeadStatus,
+  remarks: typeof data.remarks === 'string' ? data.remarks : '',
   updates: Array.isArray(data.updates) ? data.updates : [],
 })
+
+const escapeHtml = (value: unknown) => {
+  const replacements: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }
+  return String(value ?? '-').replace(/[&<>"']/g, character => replacements[character])
+}
 
 function EditIcon() {
   return (
@@ -241,6 +254,102 @@ function LeadsView({ user }: LeadsViewProps) {
   const formatTimestamp = (timestamp?: Timestamp) => {
     if (!timestamp || typeof timestamp.toDate !== 'function') return '-'
     return timestamp.toDate().toLocaleString()
+  }
+
+  // Prints the same complete information available under View Details for one lead.
+  const printLead = (lead: Lead) => {
+    const displayLeadId = lead.leadId || lead.id
+    const updatesHtml = lead.updates.length
+      ? [...lead.updates].reverse().map(update => `
+          <tr>
+            <td>${escapeHtml(formatTimestamp(update.updatedAt))}</td>
+            <td>${escapeHtml(update.updatedBy?.name || '-')}</td>
+            <td>${escapeHtml(update.mode || '-')}</td>
+            <td>${escapeHtml(update.nextUpdateDate || '-')}</td>
+            <td class="remark">${escapeHtml(update.remark || '-')}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="5" class="empty">No updates added yet.</td></tr>'
+
+    const printWindow = window.open('', '_blank', 'width=1000,height=750')
+    if (!printWindow) {
+      alert('Please allow pop-ups to print lead details.')
+      return
+    }
+
+    printWindow.document.open()
+    printWindow.document.write(`<!DOCTYPE html>
+      <html>
+        <head>
+          <title>Lead ${escapeHtml(displayLeadId)}</title>
+          <meta charset="utf-8" />
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; color: #172033; margin: 28px; font-size: 13px; }
+            h1 { font-size: 22px; margin: 0 0 5px; }
+            .subtitle { color: #64748b; margin: 0 0 22px; }
+            h2 { font-size: 16px; margin: 24px 0 10px; border-bottom: 1px solid #cbd5e1; padding-bottom: 7px; }
+            .details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+            .field { border: 1px solid #dbe2ea; border-radius: 6px; padding: 10px; min-height: 52px; overflow-wrap: anywhere; }
+            .lead-remarks { white-space: pre-wrap; overflow-wrap: anywhere; }
+            .field strong { display: block; color: #475569; font-size: 11px; margin-bottom: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #dbe2ea; padding: 9px; text-align: left; vertical-align: top; }
+            th { background: #f1f5f9; font-weight: 700; }
+            td.remark { white-space: pre-wrap; overflow-wrap: anywhere; }
+            .empty { text-align: center; color: #64748b; padding: 16px; }
+            .footer { margin-top: 24px; color: #64748b; font-size: 10px; text-align: right; }
+            @media print {
+              body { margin: 12mm; }
+              .field, tr { break-inside: avoid; }
+              h2 { break-after: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Lead Details</h1>
+          <p class="subtitle">Lead ID: ${escapeHtml(displayLeadId)}</p>
+
+          <h2>Lead Information</h2>
+          <div class="details">
+            <div class="field"><strong>Lead ID</strong>${escapeHtml(displayLeadId)}</div>
+            <div class="field"><strong>Source</strong>${escapeHtml(lead.source)}</div>
+            <div class="field"><strong>Lead Date</strong>${escapeHtml(lead.date)}</div>
+            <div class="field"><strong>Customer</strong>${escapeHtml(lead.customer.name)}</div>
+            <div class="field"><strong>Phone</strong>${escapeHtml(lead.customer.phoneNumber)}</div>
+            <div class="field"><strong>Place</strong>${escapeHtml(lead.customer.place)}</div>
+            <div class="field"><strong>Branch</strong>${escapeHtml(lead.branch)}</div>
+            <div class="field"><strong>Status</strong>${escapeHtml(lead.status)}</div>
+            <div class="field"><strong>Entered By</strong>${escapeHtml(lead.createdBy.name)}</div>
+            <div class="field"><strong>Entered At</strong>${escapeHtml(formatTimestamp(lead.createdAt))}</div>
+          </div>
+
+          <h2>Lead Remarks</h2>
+          <div class="field lead-remarks">${escapeHtml(lead.remarks || 'No remarks added.')}</div>
+
+          <h2>Update History</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Date and Time</th>
+                <th>Updated By</th>
+                <th>Mode</th>
+                <th>Next Call Date</th>
+                <th>Remarks</th>
+              </tr>
+            </thead>
+            <tbody>${updatesHtml}</tbody>
+          </table>
+          <div class="footer">Printed on ${escapeHtml(new Date().toLocaleString())}</div>
+          <script>
+            window.onload = function () {
+              window.focus();
+              window.print();
+            };
+          </script>
+        </body>
+      </html>`)
+    printWindow.document.close()
   }
 
   const openUpdateForm = (lead: Lead) => {
@@ -608,6 +717,14 @@ function LeadsView({ user }: LeadsViewProps) {
                           >
                             <DeleteIcon /><span>{deletingLead === lead.id ? 'Deleting...' : 'Delete'}</span>
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => printLead(lead)}
+                            title="Print complete lead details and update history"
+                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', background: '#f8fafc', color: '#334155', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
+                          >
+                            <span>Print</span>
+                          </button>
                         </div>
                         <div className="statistics-order-meta">
                           <span>Date: {lead.date || '-'}</span>
@@ -644,6 +761,12 @@ function LeadsView({ user }: LeadsViewProps) {
                           <div><strong>Branch</strong><span>{lead.branch || '-'}</span></div>
                           <div><strong>Status</strong><span>{lead.status}</span></div>
                           <div><strong>Entered By</strong><span>{lead.createdBy.name || '-'}</span></div>
+                          <div className="lead-original-remarks" style={{ gridColumn: '1 / -1' }}>
+                            <strong>Remarks</strong>
+                            <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                              {lead.remarks?.trim() || 'No remarks added.'}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Update history displayed as a responsive table */}
