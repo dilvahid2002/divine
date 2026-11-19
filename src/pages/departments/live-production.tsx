@@ -44,6 +44,8 @@ type JobStatus =
   | 'In Progress'
   | 'Finished'
 
+type WorkStatus = 'Active' | 'Dropped' | 'Completely finished'
+
 type Department =
   | 'design'
   | 'print'
@@ -134,6 +136,8 @@ interface MeasurementJob {
   }
 
   quotation: Quotation
+
+  workStatus: WorkStatus
 
   statuses: Statuses
 
@@ -436,6 +440,13 @@ const createMeasurementJob = (
         customerAdviser?.username,
       ),
     },
+
+    workStatus:
+      data?.workStatus === 'Dropped'
+        ? 'Dropped'
+        : data?.workStatus === 'Completely finished'
+          ? 'Completely finished'
+          : 'Active',
 
     quotation: {
       status:
@@ -2161,6 +2172,57 @@ const handleQuotationConfirm =
     ])
 
   // ===================================================
+  // QUICK NAVIGATION FROM SUMMARY TABLES
+  // ===================================================
+
+  const handleSummaryIdClick = (measurement: MeasurementJob) => {
+    setExpandedMeasurement(measurement.id)
+
+    // Wait for React to render the expanded measurement before scrolling.
+    window.setTimeout(() => {
+      document
+        .getElementById(`measurement-${measurement.id}`)
+        ?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        })
+    }, 0)
+  }
+
+  const getDepartmentSummaryStatus = (
+    selected: boolean,
+    status: JobStatus,
+  ): string => selected ? status : 'NA'
+
+  const [updatingWorkStatus, setUpdatingWorkStatus] =
+    useState<string | null>(null)
+
+  const handleWorkStatusChange = async (
+    measurement: MeasurementJob,
+    workStatus: Exclude<WorkStatus, 'Active'>,
+  ) => {
+    if (updatingWorkStatus === measurement.id) return
+
+    setUpdatingWorkStatus(measurement.id)
+    setError('')
+    try {
+      await updateDoc(
+        doc(db, 'measurements', measurement.id),
+        { workStatus },
+      )
+    } catch (statusError) {
+      console.error('Error updating work status:', statusError)
+      setError(
+        statusError instanceof Error
+          ? `Unable to update ${measurement.measurementId}: ${statusError.message}`
+          : `Unable to update ${measurement.measurementId}.`,
+      )
+    } finally {
+      setUpdatingWorkStatus(null)
+    }
+  }
+
+  // ===================================================
   // STATUS DISPLAY
   // ===================================================
 
@@ -2302,6 +2364,150 @@ const handleQuotationConfirm =
             {error}
           </div>
         )}
+
+        {/* CONFIRMED / NON-CONFIRMED WORK SUMMARY TABLES */}
+
+        <section className="department-section">
+          <div className="section-heading-row">
+            <div>
+              <h2>Confirmed Works</h2>
+              <p>Quotations confirmed and ready for workflow.</p>
+            </div>
+            <strong>{filteredMeasurements.filter((m) => m.quotation.status === 'Confirmed' && m.workStatus === 'Active').length} works</strong>
+          </div>
+
+          <div className="items-table-wrapper">
+            <table className="items-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Customer Name</th>
+                  <th>Phone Number</th>
+                  <th>Design</th>
+                  <th>Cutting</th>
+                  <th>Printing</th>
+                  <th>Production</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMeasurements
+                  .filter((measurement) => measurement.quotation.status === 'Confirmed' && measurement.workStatus === 'Active')
+                  .map((measurement) => (
+                    <tr key={`confirmed-${measurement.id}`}>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => handleSummaryIdClick(measurement)}
+                          style={{
+                            border: 0,
+                            padding: 0,
+                            background: 'none',
+                            color: '#2563eb',
+                            fontWeight: 700,
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {measurement.measurementId}
+                        </button>
+                      </td>
+                      <td>{measurement.customer.name || '-'}</td>
+                      <td>{measurement.customer.phoneNumber || '-'}</td>
+                      <td>{getDepartmentSummaryStatus(measurement.officeInfo.designJob, measurement.statuses.design)}</td>
+                      <td>{getDepartmentSummaryStatus(measurement.officeInfo.cuttingJob, measurement.statuses.cutting)}</td>
+                      <td>{getDepartmentSummaryStatus(measurement.officeInfo.printJob, measurement.statuses.print)}</td>
+                      <td>{getDepartmentSummaryStatus(measurement.officeInfo.productionJob, measurement.statuses.production)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          disabled={updatingWorkStatus === measurement.id}
+                          onClick={() => handleWorkStatusChange(measurement, 'Completely finished')}
+                          style={{ padding: '6px 10px', border: 0, borderRadius: 6, background: '#15803d', color: '#fff', cursor: 'pointer', opacity: updatingWorkStatus === measurement.id ? 0.6 : 1 }}
+                        >
+                          {updatingWorkStatus === measurement.id ? 'Saving...' : 'Finished'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                {filteredMeasurements.filter((m) => m.quotation.status === 'Confirmed' && m.workStatus === 'Active').length === 0 && (
+                  <tr><td colSpan={8} style={{ textAlign: 'center' }}>No confirmed works found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="department-section">
+          <div className="section-heading-row">
+            <div>
+              <h2>Non Confirmed Works</h2>
+              <p>Quotations that are still awaiting confirmation.</p>
+            </div>
+            <strong>{filteredMeasurements.filter((m) => m.quotation.status !== 'Confirmed' && m.workStatus === 'Active').length} works</strong>
+          </div>
+
+          <div className="items-table-wrapper">
+            <table className="items-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Customer Name</th>
+                  <th>Phone Number</th>
+                  <th>Design</th>
+                  <th>Cutting</th>
+                  <th>Printing</th>
+                  <th>Production</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMeasurements
+                  .filter((measurement) => measurement.quotation.status !== 'Confirmed' && measurement.workStatus === 'Active')
+                  .map((measurement) => (
+                    <tr key={`not-confirmed-${measurement.id}`}>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => handleSummaryIdClick(measurement)}
+                          style={{
+                            border: 0,
+                            padding: 0,
+                            background: 'none',
+                            color: '#2563eb',
+                            fontWeight: 700,
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {measurement.measurementId}
+                        </button>
+                      </td>
+                      <td>{measurement.customer.name || '-'}</td>
+                      <td>{measurement.customer.phoneNumber || '-'}</td>
+                      <td>{getDepartmentSummaryStatus(measurement.officeInfo.designJob, measurement.statuses.design)}</td>
+                      <td>{getDepartmentSummaryStatus(measurement.officeInfo.cuttingJob, measurement.statuses.cutting)}</td>
+                      <td>{getDepartmentSummaryStatus(measurement.officeInfo.printJob, measurement.statuses.print)}</td>
+                      <td>{getDepartmentSummaryStatus(measurement.officeInfo.productionJob, measurement.statuses.production)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          disabled={updatingWorkStatus === measurement.id}
+                          onClick={() => handleWorkStatusChange(measurement, 'Dropped')}
+                          style={{ padding: '6px 10px', border: 0, borderRadius: 6, background: '#b91c1c', color: '#fff', cursor: 'pointer', opacity: updatingWorkStatus === measurement.id ? 0.6 : 1 }}
+                        >
+                          {updatingWorkStatus === measurement.id ? 'Saving...' : 'DROPED'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                {filteredMeasurements.filter((m) => m.quotation.status !== 'Confirmed' && m.workStatus === 'Active').length === 0 && (
+                  <tr><td colSpan={8} style={{ textAlign: 'center' }}>No non-confirmed works found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         {/* FILTER */}
 
@@ -2460,9 +2666,11 @@ const handleQuotationConfirm =
             return (
               <section
                 className="department-section"
+                id={`measurement-${measurement.id}`}
                 key={
                   measurement.id
                 }
+                style={{ scrollMarginTop: '20px' }}
               >
 
                 {/* ORDER HEADER */}
